@@ -9,7 +9,7 @@ Arduino 7-Segment RGB LED Clock
 …</br></br>
 
 # Materials
-- 5V WS2812b Led strip (60LEDS/) or an 2020 Ws2812b strip for the smaller version</br>
+- 5V WS2812b Led strip (60 LEDS/m) or 58x 2020 WS2812b LEDs and the custom segment PCB for the smaller version</br>
 - 3x 6mm Pushbuttons</br>
 - 3D-printed parts</br>
 - DS3231 RTC Module</br>
