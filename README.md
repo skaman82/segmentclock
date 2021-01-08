@@ -12,7 +12,7 @@ Arduino 7-Segment RGB LED Clock
 - 5V WS2812b Led strip (60 LEDS/m) or 58x 2020 WS2812b LEDs and the custom segment PCB for the smaller version</br>
 - 3x 6mm Pushbuttons</br>
 - 3D-printed parts</br>
-- DS3231 RTC Module</br>
+- DS3231 RTC Module (the small one)</br>
 - Arduino Nano (or my custom PCB)</br>
 - Photo-Resistor (optional)</br>
 - DHT22 Temperature Sensor (optional)</br>
