@@ -21,21 +21,21 @@
 //Needed digits
 //An: >ClockAnimation
 //Al: >Alarm
-//PS: >PageScroll 
+//PS: >PageScroll
 
 
 //>> More charakters needed "A" "n" "P" "S" "l"
 
 
-  //Returned Button codes
-  // 1 = Up
-  // 2 = Center
-  // 3 = Down
-  // 4 = Up LONG
-  // 5 = Center LONG
-  // 6 = Down LONG
+//Returned Button codes
+// 1 = Up
+// 2 = Center
+// 3 = Down
+// 4 = Up LONG
+// 5 = Center LONG
+// 6 = Down LONG
 
-  
+
 //==================================================================================================================
 
 #include <Adafruit_NeoPixel.h> //Adafruit NeoPixel
@@ -62,8 +62,8 @@
 
 //==================================================================================================================
 
-#define tempoffset          0   //Temperature adjustment (positive or negative value) no DHT Sensor required
-#define humidityoffset      0   //Humidity adjustment (positive or negative value) only with DHT sensor
+float tempoffset       =   -0.5;  //Temperature adjustment (positive or negative value) no DHT Sensor required
+float humidityoffset   =   0.0;   //Humidity adjustment (positive or negative value) only with DHT sensor
 
 //==================================================================================================================
 //USER CONFIG END
@@ -108,8 +108,15 @@ byte dot = 0;
 byte newhours;
 byte newminutes;
 int lightvalue;
-byte samplecount = 0;
+byte tempsamplecount = 0;
+byte humsamplecount = 0;
 int16_t buffertemp = 0;
+int16_t bufferhum = 0;
+int16_t hum = 0;
+int16_t temp = 0;
+int16_t newtemp = 0;
+int16_t newhum = 0;
+
 
 unsigned long previousMillis = 0; // will store last time LED was updated
 unsigned long previousAniMillis = 0;  // will store last time LED was updated
@@ -163,7 +170,7 @@ void setup() {
   if (colorset > 8) {
     colorset = 0;
   }
-  
+
 }
 
 
@@ -197,7 +204,7 @@ byte buttoncheck()
     buttonz = 2; //Center pressed
 
     if (i_butt > (longpresstime)) {
-      buttonz = 5; //Button center pressed long 
+      buttonz = 5; //Button center pressed long
       delay(2);
     }
 
@@ -208,7 +215,7 @@ byte buttoncheck()
       i_butt++;
     }
     buttonz = 3; //Down pressed
-    
+
     if (i_butt > (longpresstime)) {
       buttonz = 6; //Button down pressed long
       delay(2);
@@ -234,8 +241,8 @@ void loop() {
   unsigned long currentUpdateMillis = millis();
   if (currentUpdateMillis - previousUpdateMillis >= 300000) {
     previousUpdateMillis = currentUpdateMillis;
-    setSyncProvider(RTC.get);
-    Serial.println("TIME SYNCED");
+    //   setSyncProvider(RTC.get);
+    //   Serial.println("TIME SYNCED");
   }
 
 }
@@ -266,6 +273,12 @@ void ledcontrol() {
 #ifdef DHTsensor //add humidity page
       if (page < 2) {
         page = page + 1;
+        //reset temp and humidity samples
+        buffertemp = 0;
+        bufferhum = 0;
+        tempsamplecount = 0;
+        humsamplecount = 0;
+
         Serial.println(page);
       }
 #endif
@@ -273,6 +286,13 @@ void ledcontrol() {
 #ifndef DHTsensor
       if (page < 1) {
         page = page + 1;
+
+        //reset temp samples
+        buffertemp = 0;
+        tempsamplecount = 0; //reset temp and humidity samples
+
+
+
         Serial.println(page);
       }
 #endif
@@ -304,6 +324,7 @@ void ledcontrol() {
 
     else if (page == 1) {
       showtemp();
+
     }
     else if (page == 2) {
       showhumidity();
@@ -693,8 +714,8 @@ void mapPixels() {
 //BRIGHTNESS CONTROL
 //==================================================================================================================
 void setbrightness() {
-  
-  #ifdef LightSensor
+
+#ifdef LightSensor
   lightvalue = analogRead(lightsens); //Photo-Resistor
 
   // Serial.print("Fhotosensor: ");
@@ -709,10 +730,10 @@ void setbrightness() {
 
   lightvalue = map(lightvalue, 40, 1000, 50, 255);
   pixels.setBrightness(lightvalue); //regulates the brightness of the whole strip
-  #endif
-  #ifndef LightSensor
+#endif
+#ifndef LightSensor
   pixels.setBrightness(255); //max brightness if "LightSensor" not defined
-  #endif
+#endif
 }
 
 
@@ -751,7 +772,10 @@ void updateNumber() {
       //animation every minute
       if (number_min2 != digitbuffer) {
         animateflag = 1;
+        //number_min1 = 0;
         number_min2 = 0;
+        //number_hour1 = 0;
+        //number_hour2 = 0;
       }
       else {
         animateflag = 0;
@@ -763,6 +787,9 @@ void updateNumber() {
       if (number_min1 != digitbuffer) {
         animateflag = 1;
         number_min1 = 0;
+        //number_min2 = 0;
+        //number_hour1 = 0;
+        //number_hour2 = 0;
       }
       else {
         animateflag = 0;
@@ -797,86 +824,63 @@ void showtemp() {
   if (currentMillis - previousMillis >= 1000) {
     previousMillis = currentMillis;
 
-    //draw a "dash" while waiting for data
-    if ((number_hour1 == 0) && (number_hour2 == 0) && (number_min1 == 0) && (number_min2 == 0)) {
-      number_hour1 = 15; //dash
-      number_hour2 = 15; //dash
-      number_min1 = 15; //dash
-      number_min2 = 15; //dash
-      Serial.println("No data yet, waiting…");
-    }
+    if (tempsamplecount < 5) {
 
 #ifndef DHTsensor
-    if (samplecount < 5) {
       int16_t rtcTemp = RTC.temperature();
-      float c = rtcTemp / 4.;
-
-      //Serial.print("RTC Temperature:");
-      //Serial.println(c);
-
-      int16_t temp = c * 10;
-      //Serial.println(temp);
-
-      buffertemp += temp;
-      samplecount++;
-
-      Serial.println(samplecount);
-      Serial.println(buffertemp);
-    }
-    else if (samplecount == 5) {
-      //get the avarege of the five measurements
-      buffertemp = buffertemp / 5;
-      buffertemp = buffertemp + tempoffset; //adjust the result if neccesary
-
-      Serial.print("AVG Temp:");
-      Serial.println(buffertemp);
-
-      number_hour1 = (buffertemp / 100U) % 10; //first digit of temp
-      number_hour2 = (buffertemp / 10U) % 10; //second digit of temp
-      number_min1 = (buffertemp % 10); //last digit of temp
-      number_min2 = 13; //code for "°"
-
-      samplecount = 0; //reset the sample counter
-    }
+      float c = rtcTemp / 4.; //convert to celsius
 #endif
 
 #ifdef DHTsensor
-    if (samplecount < 5) {
-
-      float c = dht.readTemperature();
-      int16_t temp = c * 10;
-
-      //Serial.print(F("DHT Temperature: "));
-      //Serial.println(c);
+      float c = dht.readTemperature(); //temp in celsius
 
       if (isnan(c)) {
         Serial.println(F("Failed to read from DHT sensor!"));
         return;
       }
+#endif
+
+      Serial.print(F("Sensor Temperature: "));
+      Serial.println(c);
+
+      //apply user temperature offset
+      c = c + tempoffset;
+
+      temp = c * 10 ;
 
       buffertemp += temp;
-      samplecount++;
-
-      Serial.println(samplecount);
-      Serial.println(buffertemp);
+      tempsamplecount++;
     }
 
-    else if (samplecount == 5) {
+    else if (tempsamplecount == 5) {
       //get the avarege of the five measurements
       buffertemp = buffertemp / 5;
-      buffertemp = buffertemp + tempoffset; //adjust the result if neccesary
+      buffertemp = buffertemp; //adjust the result if neccesary
 
       Serial.print("AVG Temp:");
       Serial.println(buffertemp);
 
-      number_hour1 = (buffertemp / 100U) % 10; //first digit of temp
-      number_hour2 = (buffertemp / 10U) % 10; //second digit of temp
-      number_min1 = 13;
+      newtemp = buffertemp;
+      tempsamplecount = 0; //reset the sample counter
+      buffertemp = 0;
+    }
+
+    //draw a "dash" while waiting for data first time
+    if (newtemp == 0) {
+      number_hour1 = 15; //dash
+      number_hour2 = 15; //dash
+      number_min1 = 13; //code for c
       number_min2 = 11; //code for "°"
 
-      samplecount = 0; //reset the sample counter
+      Serial.println("No avg. data yet, waiting…");
     }
-#endif
+    else {
+      number_hour1 = (newtemp / 100U) % 10; //first digit of temp
+      number_hour2 = (newtemp / 10U) % 10; //second digit of temp
+      number_min1 = 13; //code for c
+      number_min2 = 11; //code for "°"
+    }
+
 
   }
 
@@ -896,30 +900,55 @@ void showhumidity() {
   if (currentMillis - previousMillis >= 1000) {
     previousMillis = currentMillis;
 
-    //draw a "dash" while waiting for data
-    if ((number_hour1 == 0) && (number_hour2 == 0) && (number_min1 == 0) && (number_min2 == 0)) {
+
+    if (humsamplecount < 5) {
+      float h = dht.readHumidity();
+      hum = h * 10;
+
+      if (isnan(h)) {
+        Serial.println(F("Failed to read from DHT sensor!"));
+        return;
+      }
+      else {
+        Serial.print(F("Sensor Humidity: "));
+        Serial.println(h);
+      }
+
+      //apply user temperature offset
+      hum = hum + humidityoffset;
+
+      bufferhum += hum;
+      humsamplecount++;
+    }
+
+    else if (humsamplecount == 5) {
+      //get the avarege of the five measurements
+      bufferhum = bufferhum / 5;
+
+      Serial.print("AVG Hum:");
+      Serial.println(bufferhum);
+
+      newhum = bufferhum;
+      humsamplecount = 0; //reset the sample counter
+      bufferhum = 0;
+    }
+
+
+    //draw a "dash" while waiting for data first time
+    if (newhum == 0) {
       number_hour1 = 15; //dash
       number_hour2 = 15; //dash
-      number_min1 = 15; //dash
-      number_min2 = 15; //dash
-      Serial.println("No data yet, waiting…");
+      number_min1 = 14; //code for "°"  %
+      number_min2 = 14; //code for "°"  %
+
+      Serial.println("No avg. data yet, waiting…");
     }
-
-    float h = dht.readHumidity();
-    int16_t hum = h * 10;
-
-    Serial.print(F("DHT Humidity: "));
-    Serial.println(h);
-
-    if (isnan(h)) {
-      Serial.println(F("Failed to read from DHT sensor!"));
-      return;
+    else {
+      number_hour1 = (newhum / 100U) % 10; //first digit of temp
+      number_hour2 = (newhum / 10U) % 10; //second digit of temp
+      number_min1 = 14; //code for "°"  %
+      number_min2 = 14; //code for "°"  %
     }
-
-    number_hour1 = (hum / 100U) % 10; //first digit of temp
-    number_hour2 = (hum / 10U) % 10; //second digit of temp
-    number_min1 = 14; //code for "°"  %
-    number_min2 = 14; //code for "°"  %
   }
 
 #endif
@@ -935,7 +964,7 @@ void settime() {
 
   Serial.println("entered menu");
 
-  while (menu = 1) {
+  while (menu == 1) {
     buttoncheck();
 
     uint32_t off = pixels.Color(0, 0, 0);
@@ -1029,7 +1058,7 @@ void settime() {
       return;
     }
   }
-  exit;
+  //exit;
 
 }
 
@@ -1052,6 +1081,16 @@ void animate() {
       number_min1 = number_min1 + 1;
       number_hour2 = number_hour2 + 1;
       number_hour1 = number_hour1 + 1;
+
+      if (number_hour1 > 9) {
+        number_hour1 = 0;
+      }
+      if (number_hour2 > 9) {
+        number_hour2 = 0;
+      }
+      if (number_min1 > 9) {
+        number_min1 = 0;
+      }
       delay(20);
 
       if (number_min2 == 10) {
@@ -1076,7 +1115,8 @@ void animate() {
   }
 
   else {
-    exit;
+    return;
+    //exit;
   }
 
 }
@@ -1091,9 +1131,10 @@ void printDigits(int digits)
 {
   // utility function for digital clock display: prints preceding colon and leading 0
   Serial.print(':');
-  if (digits < 10)
+  if (digits < 10) {
     Serial.print('0');
-  Serial.print(digits);
+    Serial.print(digits);
+  }
 }
 
 
