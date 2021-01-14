@@ -1,12 +1,12 @@
 //Code by Albert Kravcov
 //==================================================================================================================
 // TODOS
-// - avg. measurements from DHT() and lightsensor()
-// - temp + humidity user offsetts()
+// - WIFI Module Sync (done)
 // - EEPROM support() & menus for Animation() + Color()
 // - RTC battery alarm()
 // - Alarm setting support()
 // - Microphone support()
+// - Radio support()
 
 
 
@@ -36,51 +36,119 @@
 // 6 = Down LONG
 
 
-//==================================================================================================================
-
-#include <Adafruit_NeoPixel.h> //Adafruit NeoPixel
-#include <DS3232RTC.h> // https://github.com/JChristensen/DS3232RTC
-#include <EEPROM.h>
 
 
 //OPTIONAL USER CONFIG START
 //==================================================================================================================
+#define DEBUG        //SERIAL OUTPUT
+
 #define LightSensor   //An external photo-resistor can automatically adjust brightness of the clock
-#define AudioSensor   //uncomment if you are using an microphone, adds additional animation mode controlled by sound
-#define DHTsensor     //The DHT sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
+//#define DHTsensor     //The DHT sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
+#define WIFI          //ESP8266 S01 Module can sync time over WIFI
+
+#define OLED        //OLED SCEEN < WORK IN PROGRESS
+
+//#define IRCONTROL     //TODO: IR REMOTE
+//#define RAD           //TODO: RADIO MODULE - Requres OLED & IRCONTROL option
+//#define AudioSensor   //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
 //==================================================================================================================
 
 #ifdef DHTsensor
 #include <DHT.h>            //"Adafruit DHT" + "Ardafruit Unified Sensor" libraries required;
-#define DHTPIN          7   //AUX2 pad (DHT22, DHT21 or DHT11) 
-
-//UNCOMMENT THE RIGHT SENSOR
-//#define DHTTYPE DHT22     // DHT 22   (AM2302), AM2321
-//#define DHTTYPE DHT21     // DHT 21   (AM2301)
-#define DHTTYPE DHT11       // DHT 11
+#define DHTTYPE DHT22       // DHT 22   (AM2302), AM2321
 #endif
-
+//#define Temp_F              //Teperature will be converted from C to F
+#ifdef WIFI
+int UTCoffset = +1;         //UTC Time offset e.g. ("1" or "-1") - Used only for WiFi-Sync
+#endif
 //==================================================================================================================
 
-float tempoffset       =   -0.5;  //Temperature adjustment (positive or negative value) no DHT Sensor required
-float humidityoffset   =   0.0;   //Humidity adjustment (positive or negative value) only with DHT sensor
-
+float tempoffset       =   0.0;  //-1 Temperature adjustment (positive or negative value) no DHT Sensor required
+float humidityoffset   =   0.0;   //+1 Humidity adjustment (positive or negative value) only with DHT sensor
 //==================================================================================================================
 //USER CONFIG END
+//==================================================================================================================
 
+#ifdef RAD
+#include <radio.h>
+#include <TEA5767.h>
+#define FIX_BAND RADIO_BAND_FM
+#define FIX_STATION 8930
+TEA5767 radio;    // Create an instance of Class for Si4703 Chip
+#endif
+
+#ifdef OLED
+#include <U8g2lib.h>
+#endif
+#include <Wire.h>
+#include <EEPROM.h>
+#include <Adafruit_NeoPixel.h> //Adafruit NeoPixel
+#include <TimeLib.h> //https://github.com/PaulStoffregen/Time
+#include <DS3232RTC.h> // https://github.com/JChristensen/DS3232RTC
+
+
+#ifdef OLED
+
+U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+//U8G2_SSD1306_96X16_ER_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // EastRising 0.69" OLED
+//U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
+
+#endif
+
+#ifdef WIFI
+
+#include <SoftwareSerial.h>
+#include <ICSC.h>
+
+SoftwareSerial mySerial(2, 10); // RX, TX > UNCOMMENT IF YOU HARDWARE HAS A SECOND SERIAL
+ICSC icsc(mySerial, 'B');  //Use sostserial
+//ICSC icsc(Serial1, 'B');  //Use port 1 on a Leonardo or ATmega644p
+
+
+byte newhour = 0;
+unsigned long wifiPacket = 0; //packets
+unsigned long oldwifiPacket = 0; //packets
+byte Packetdelta = 10; //
+uint8_t wifiHour = 0; //hours
+uint8_t wifiMinute = 0; //minutes
+uint8_t wifiSecond = 0; //seconds
+uint8_t wifiWeekDay = 0; //weekday
+uint8_t wifiDD = 0; //day
+uint8_t wifiMM = 0; //month
+uint16_t wifiYYYY = 0; //year
+uint8_t wifiState = 0; //module status
+
+
+struct dataStruct {
+  unsigned long Packet;
+  uint8_t hh; //HH hours
+  uint8_t mm; //MM minutes
+  uint8_t ss; //SS seconds
+  uint8_t WeekDay; //day of the week
+  uint8_t DD; //DD day
+  uint8_t MM; //MM month
+  uint16_t YY; //YYYY year
+  uint8_t ModuleStatus; //Status (normaly 2)
+  uint8_t cond; //xx 5
+  uint8_t temp_max; //xx 30
+  uint8_t temp_min; //xx 10
+};
+
+#endif
 
 //#define serial //Debug data over Serial
 
 
-#define LEDPIN          3
+#define LEDPIN          3   //was 3
+#define IRPIN           2   //was 3
 #define bt_up           4   //Button up
 #define bt_set          5   //Button set
 #define bt_dwn          6   //Button down
-#define lightsens       A1  //Button down
+#define DHTPIN          7   //AUX2 pad (DHT22 out) 
 #define buzzer          9   //Speaker
 #define vbat            A0  //RTC Battery Monitoring
+#define lightsens       A1  //Photo Resistor 
 #define mic             A2  //AUX1 pad - Microphone 
-
 #define colorADDR       1   // EEPROM Adress
 #define animationADDR   2   // EEPROM Adress
 #define alarmStateADDR  3   // EEPROM Adress
@@ -90,8 +158,8 @@ float humidityoffset   =   0.0;   //Humidity adjustment (positive or negative va
 #define NUMPIXELS       60
 #define longpresstime   500 // in ms
 
-
-byte colorset = 1;
+byte wifimodule = 0;
+byte popup = 0;
 byte animationsetting = 1;  //0 off; 1 every minute; 2 every 10 minutes
 byte page = 0;
 byte menu = 0;
@@ -109,18 +177,26 @@ byte newhours;
 byte newminutes;
 int lightvalue;
 byte tempsamplecount = 0;
-byte humsamplecount = 0;
-int16_t buffertemp = 0;
-int16_t bufferhum = 0;
-int16_t hum = 0;
-int16_t temp = 0;
-int16_t newtemp = 0;
-int16_t newhum = 0;
+float buffertemp = 0;
+float bufferhum = 0;
+float newtemp = 0;
+float newhum = 0;
+int16_t digittemp = 0;
+int16_t digithum = 0;
+
+
+byte brightness = 0;
+byte old_brightness = 0;
+byte volume = 0;
+byte old_volume = 0;
+byte colorset = 1;
+byte old_colorset = 2;
 
 
 unsigned long previousMillis = 0; // will store last time LED was updated
-unsigned long previousAniMillis = 0;  // will store last time LED was updated
-unsigned long previousUpdateMillis = 0;  // will store last time LED was updated
+unsigned long previousAniMillis = 0;  // Animation Timer
+unsigned long previousUpdateMillis = 0;  // Sensor Update Timer
+unsigned long previousTimeoutMillis = 0;  // Timeout Timer
 
 
 const long interval = 1000; // interval at which to blink (milliseconds)
@@ -134,11 +210,12 @@ DHT dht(DHTPIN, DHTTYPE);
 
 
 
-
-
 void setup() {
-  Serial.begin(9600);
-  pinMode(vbat, INPUT);           //RTC Battery voltage
+#ifdef DEBUG
+  Serial.begin(115200);
+#endif
+
+  //  pinMode(vbat, INPUT);           //RTC Battery voltage
   pinMode(buzzer, OUTPUT);        //SPEAKER
   pinMode(bt_up, INPUT_PULLUP);   //BUTTON
   pinMode(bt_set, INPUT_PULLUP);  //BUTTON
@@ -158,6 +235,19 @@ void setup() {
   pinMode(mic, INPUT);            //AUDIO SENSOR
 #endif
 
+
+#ifdef WIFI
+  mySerial.begin(115200);
+  //Serial1.begin(115200); Use port 1 on a Leonardo or ATmega644p
+  icsc.begin();
+  icsc.registerCommand('U', &wifiupdate);
+#endif
+
+#ifdef OLED
+  u8g2.begin();
+#endif
+
+  //RTC.begin(); //only for non AVR Boards
   setSyncProvider(RTC.get);   // the function to get the time from the RTC
 
   if (timeStatus() != timeSet)
@@ -170,6 +260,17 @@ void setup() {
   if (colorset > 8) {
     colorset = 0;
   }
+#ifdef OLED
+  u8g2.begin();
+#endif
+  tone(buzzer, 500, 50);
+
+#ifdef RAD
+  radio.init();
+  radio.setBandFrequency(FIX_BAND, FIX_STATION); // hr3 nearby Frankfurt in Germany
+  radio.setVolume(volume);
+  radio.setMono(false);
+#endif
 
 }
 
@@ -237,14 +338,19 @@ void loop() {
 
   ledcontrol();
 
-  //sync time every five minutes
-  unsigned long currentUpdateMillis = millis();
-  if (currentUpdateMillis - previousUpdateMillis >= 300000) {
-    previousUpdateMillis = currentUpdateMillis;
-    //   setSyncProvider(RTC.get);
-    //   Serial.println("TIME SYNCED");
+  if (wifimodule == 0) {
+    // Serial.println("NO WIFI MODULE FOUND");
   }
 
+  //sync time every five minutes
+  unsigned long currentUpdateMillis = millis();
+  if (currentUpdateMillis - previousUpdateMillis >= 1000) {
+    previousUpdateMillis = currentUpdateMillis;
+
+
+    // do stuff every second
+
+  }
 }
 
 
@@ -258,6 +364,26 @@ void ledcontrol() {
   for (j = 0; j < 256; j++) { // cycle of all colors on wheel
 
     buttoncheck();
+
+
+    getTempHum();
+
+#ifdef OLED
+
+    PopUphandler();
+    //OLEDdraw();
+
+
+#endif
+
+#ifdef WIFI
+    icsc.process();
+    checktimeout();
+#endif
+
+
+
+
 
     if (pressedbut == 1) {
       if (colorset < 9) {
@@ -273,11 +399,11 @@ void ledcontrol() {
 #ifdef DHTsensor //add humidity page
       if (page < 2) {
         page = page + 1;
+
         //reset temp and humidity samples
-        buffertemp = 0;
-        bufferhum = 0;
-        tempsamplecount = 0;
-        humsamplecount = 0;
+        //buffertemp = 0;
+        //bufferhum = 0;
+        //tempsamplecount = 0;
 
         Serial.println(page);
       }
@@ -288,10 +414,8 @@ void ledcontrol() {
         page = page + 1;
 
         //reset temp samples
-        buffertemp = 0;
-        tempsamplecount = 0; //reset temp and humidity samples
-
-
+        //buffertemp = 0;
+        //tempsamplecount = 0; //reset temp and humidity samples
 
         Serial.println(page);
       }
@@ -401,9 +525,15 @@ void ledcontrol() {
 
     mapPixels();
     setbrightness();
+
+
+
     pixels.show();
-    delay(100);
+    //Serial.print("loop");
+    delay(100); //test
   }
+
+  return;
 }
 
 
@@ -718,7 +848,7 @@ void setbrightness() {
 #ifdef LightSensor
   lightvalue = analogRead(lightsens); //Photo-Resistor
 
-  // Serial.print("Fhotosensor: ");
+  // Serial.print("Photosensor: ");
   // Serial.println(lightvalue);
 
   if (lightvalue < 40) { //value for dark
@@ -740,13 +870,24 @@ void setbrightness() {
 
 
 
-//CLOCK FUNCTIONS
+//CLOCK FUNCTIONS getting time from RTC
 //==================================================================================================================
 void updateNumber() {
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
+
+    //tmElements_t tm;
+    //RTC.read(tm);
+    //Serial.print("RTC READ:");
+    //Serial.print(tm.Hour, DEC);
+    //Serial.print(':');
+    //Serial.print(tm.Minute,DEC);
+    //Serial.print(':');
+    //Serial.println(tm.Second,DEC);
+
+
 
     number_hour2 = (hour() % 10); //last digit of the hours
 
@@ -766,6 +907,14 @@ void updateNumber() {
     else {
       number_min1 = (minute() / 10U) % 10; //first digit of the seconds
     }
+
+
+    //Serial.print("SYSTEM TIME: ");
+    //Serial.print(hour());
+    //Serial.print(":");
+    //Serial.print(minute());
+    //Serial.print(":");
+    //Serial.println(second());
 
 
     if (animationsetting == 1) {
@@ -812,6 +961,93 @@ void updateNumber() {
 
 
 
+void getTempHum() {
+  unsigned long currentUpdateMillis = millis();
+
+  if (currentUpdateMillis - previousUpdateMillis >= 1000) { //was1000
+    previousUpdateMillis = currentUpdateMillis;
+
+    if (tempsamplecount < 5) {
+
+#ifndef DHTsensor
+      int16_t rtcTemp = RTC.temperature();
+      float c = rtcTemp / 4.; //convert to celsius
+
+#ifdef Temp_F
+      c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
+#endif
+
+#endif
+
+#ifdef DHTsensor
+      float c = dht.readTemperature(); //temp in celsius
+      float h = dht.readHumidity();
+
+#ifdef Temp_F
+      c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
+#endif
+
+      if (isnan(c)) {
+        Serial.println(F("Failed to read from DHT sensor!"));
+        return;
+      }
+
+      //Serial.print(F("Sensor Humidity: "));
+      //Serial.println(h);
+#endif
+
+      //Serial.print(F("Sensor Temperature: "));
+      //Serial.println(c);
+
+
+      //apply user temperature offset
+      c = c + tempoffset;
+      buffertemp += c;
+
+#ifdef DHTsensor
+      //apply user humidity offset
+      h = h + humidityoffset;
+      bufferhum += h;
+#endif
+
+      tempsamplecount++;
+    }
+
+    //get the avarege of the five measurements
+
+    else if (tempsamplecount == 5) {
+      buffertemp = buffertemp / 5;
+      Serial.print("AVG Temp:");
+      Serial.println(buffertemp);
+      newtemp = buffertemp;
+      digittemp = newtemp * 10;
+
+      buffertemp = 0; //reset buffer
+
+
+#ifdef DHTsensor
+      bufferhum = bufferhum / 5;
+      Serial.print("AVG Hum:");
+      Serial.println(bufferhum);
+      newhum = bufferhum;
+      digithum = newhum * 10;
+
+      bufferhum = 0; //reset buffer
+#endif
+
+      tempsamplecount = 0; //reset the sample counter
+
+
+    }
+
+
+
+
+  }
+
+}
+
+
 
 
 
@@ -819,69 +1055,21 @@ void updateNumber() {
 //==================================================================================================================
 void showtemp() {
 
-  unsigned long currentMillis = millis();
 
-  if (currentMillis - previousMillis >= 1000) {
-    previousMillis = currentMillis;
+  //draw a "dash" while waiting for data first time
+  if (digittemp == 0) {
+    number_hour1 = 15; //dash
+    number_hour2 = 15; //dash
+    number_min1 = 13; //code for c
+    number_min2 = 11; //code for "°"
 
-    if (tempsamplecount < 5) {
-
-#ifndef DHTsensor
-      int16_t rtcTemp = RTC.temperature();
-      float c = rtcTemp / 4.; //convert to celsius
-#endif
-
-#ifdef DHTsensor
-      float c = dht.readTemperature(); //temp in celsius
-
-      if (isnan(c)) {
-        Serial.println(F("Failed to read from DHT sensor!"));
-        return;
-      }
-#endif
-
-      Serial.print(F("Sensor Temperature: "));
-      Serial.println(c);
-
-      //apply user temperature offset
-      c = c + tempoffset;
-
-      temp = c * 10 ;
-
-      buffertemp += temp;
-      tempsamplecount++;
-    }
-
-    else if (tempsamplecount == 5) {
-      //get the avarege of the five measurements
-      buffertemp = buffertemp / 5;
-      buffertemp = buffertemp; //adjust the result if neccesary
-
-      Serial.print("AVG Temp:");
-      Serial.println(buffertemp);
-
-      newtemp = buffertemp;
-      tempsamplecount = 0; //reset the sample counter
-      buffertemp = 0;
-    }
-
-    //draw a "dash" while waiting for data first time
-    if (newtemp == 0) {
-      number_hour1 = 15; //dash
-      number_hour2 = 15; //dash
-      number_min1 = 13; //code for c
-      number_min2 = 11; //code for "°"
-
-      Serial.println("No avg. data yet, waiting…");
-    }
-    else {
-      number_hour1 = (newtemp / 100U) % 10; //first digit of temp
-      number_hour2 = (newtemp / 10U) % 10; //second digit of temp
-      number_min1 = 13; //code for c
-      number_min2 = 11; //code for "°"
-    }
-
-
+    //Serial.println("No avg. data yet, waiting…");
+  }
+  else {
+    number_hour1 = (digittemp / 100U) % 10; //first digit of temp
+    number_hour2 = (digittemp / 10U) % 10; //second digit of temp
+    number_min1 = 13; //code for c
+    number_min2 = 11; //code for "°"
   }
 
 }
@@ -893,66 +1081,25 @@ void showtemp() {
 //HUMIDITY READOUT (DHT required)
 //==================================================================================================================
 void showhumidity() {
-#ifdef DHTsensor
 
-  unsigned long currentMillis = millis();
+  //draw a "dash" while waiting for data first time
+  if (newhum == 0) {
+    number_hour1 = 15; //dash
+    number_hour2 = 15; //dash
+    number_min1 = 14; //code for "°"  %
+    number_min2 = 14; //code for "°"  %
 
-  if (currentMillis - previousMillis >= 1000) {
-    previousMillis = currentMillis;
-
-
-    if (humsamplecount < 5) {
-      float h = dht.readHumidity();
-      hum = h * 10;
-
-      if (isnan(h)) {
-        Serial.println(F("Failed to read from DHT sensor!"));
-        return;
-      }
-      else {
-        Serial.print(F("Sensor Humidity: "));
-        Serial.println(h);
-      }
-
-      //apply user temperature offset
-      hum = hum + humidityoffset;
-
-      bufferhum += hum;
-      humsamplecount++;
-    }
-
-    else if (humsamplecount == 5) {
-      //get the avarege of the five measurements
-      bufferhum = bufferhum / 5;
-
-      Serial.print("AVG Hum:");
-      Serial.println(bufferhum);
-
-      newhum = bufferhum;
-      humsamplecount = 0; //reset the sample counter
-      bufferhum = 0;
-    }
-
-
-    //draw a "dash" while waiting for data first time
-    if (newhum == 0) {
-      number_hour1 = 15; //dash
-      number_hour2 = 15; //dash
-      number_min1 = 14; //code for "°"  %
-      number_min2 = 14; //code for "°"  %
-
-      Serial.println("No avg. data yet, waiting…");
-    }
-    else {
-      number_hour1 = (newhum / 100U) % 10; //first digit of temp
-      number_hour2 = (newhum / 10U) % 10; //second digit of temp
-      number_min1 = 14; //code for "°"  %
-      number_min2 = 14; //code for "°"  %
-    }
+    Serial.println("No avg. data yet, waiting…");
   }
-
-#endif
+  else {
+    number_hour1 = (digithum / 100U) % 10; //first digit of temp
+    number_hour2 = (digithum / 10U) % 10; //second digit of temp
+    number_min1 = 14; //code for "°"  %
+    number_min2 = 14; //code for "°"  %
+  }
 }
+
+
 
 
 
@@ -1052,7 +1199,7 @@ void settime() {
 
     if (pressedbut == 5) {
       setTime(newhours, newminutes, 0, 30, 12, 2020); //rtc.setTime(byte hours, byte minutes, byte seconds)
-      RTC.set(now());
+      //RTC.set(now());
       Serial.println("new time saved");
       menu = 0;
       return;
@@ -1091,7 +1238,7 @@ void animate() {
       if (number_min1 > 9) {
         number_min1 = 0;
       }
-      delay(20);
+      delay(20); //test
 
       if (number_min2 == 10) {
 
@@ -1157,3 +1304,346 @@ uint32_t Wheel(byte WheelPos) {
   return pixels.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 
 }
+
+#ifdef OLED
+void PopUphandler() {
+
+  if (colorset != old_colorset) {
+    Serial.println("color-pop triggered");
+    popup = 1;
+    colorpopup();
+    delay(1000);
+    old_colorset = colorset;
+    popup = 0;
+  }
+
+  if (brightness != old_brightness) {
+    Serial.println("brightness-pop triggered");
+    //popup = 1;
+    //brightnesspopup();
+    //delay(1000);
+    //old_brightness = brightness;
+    //popup = 0;
+  }
+
+  if (volume != old_volume) {
+    Serial.println("volume-pop triggered");
+    popup = 1;
+    volumepopup();
+    delay(1000);
+    old_volume = volume;
+    popup = 0;
+  }
+
+  else {
+    popup = 0;
+    OLEDdraw();
+    return;
+  }
+}
+
+
+
+void colorpopup() {
+  u8g2.firstPage();
+  do {
+
+    if (popup == 1) {
+      u8g2.setFont(u8g2_font_ncenB10_tr);
+      u8g2.setCursor(0, 24);
+      u8g2.print("NEW COLOR:");
+      u8g2.print(colorset);
+    }
+
+  } while ( u8g2.nextPage() );
+}
+
+void brightnesspopup() {
+  u8g2.firstPage();
+  do {
+
+    if (popup == 1) {
+      u8g2.setFont(u8g2_font_ncenB10_tr);
+      u8g2.setCursor(0, 24);
+      u8g2.print("NEW BRIGHT:");
+      u8g2.print(brightness);
+    }
+
+  } while ( u8g2.nextPage() );
+}
+
+
+void volumepopup() {
+  u8g2.firstPage();
+  do {
+
+    if (popup == 1) {
+      u8g2.setFont(u8g2_font_ncenB10_tr);
+      u8g2.setCursor(0, 24);
+      u8g2.print("NEW VOLUME:");
+      u8g2.print(volume);
+    }
+
+  } while ( u8g2.nextPage() );
+}
+
+void OLEDdraw() {
+
+
+  //Serial.print("wifiState:");
+  //Serial.println(wifiState);
+  //Serial.print("module:");
+  //Serial.println(wifimodule);
+
+
+  u8g2.firstPage();
+  do {
+
+
+
+    if (wifimodule == 0) {
+      u8g2.setFont(u8g2_font_ncenB10_tr);
+      u8g2.setCursor(0, 24);
+      u8g2.print("RTC");
+
+      u8g2.setFont(u8g2_font_ncenB10_tr);
+      u8g2.setCursor(0, 40);
+      if (hour() <= 9) {
+        u8g2.print("0");
+      }
+      u8g2.print(hour());
+      u8g2.print(":");
+      if (minute() <= 9) {
+        u8g2.print("0");
+      }
+      u8g2.print(minute());
+      u8g2.print(":");
+      if (second() <= 9) {
+        u8g2.print("0");
+      }
+      u8g2.print(second());
+
+      u8g2.setCursor(0, 55);
+      u8g2.print(day());
+      u8g2.print(".");
+      u8g2.print(month());
+      u8g2.print(".");
+      u8g2.print(year());
+
+      u8g2.setCursor(65, 24);
+      u8g2.print("T:");
+      u8g2.print(newtemp, 1);
+
+#ifndef Temp_F
+      u8g2.print(" C");
+#endif
+#ifdef Temp_F
+      u8g2.print(" F");
+#endif
+
+#ifdef DHTsensor
+      u8g2.setCursor(65, 40);
+      u8g2.print("H:");
+      u8g2.print(newhum, 0);
+      u8g2.print(" %");
+#endif
+    }
+
+    else if (wifimodule == 1) { //IF WE HAVE A WI FI MODULE
+
+#ifdef WIFI
+
+
+
+
+      if (wifiState == 2) {
+        u8g2.setFont(u8g2_font_ncenB10_tr);
+        u8g2.setCursor(0, 24);
+        u8g2.print("WiFi");
+
+        u8g2.setFont(u8g2_font_ncenB10_tr);
+        u8g2.setCursor(0, 40);
+        if (wifiHour <= 9) {
+          u8g2.print("0");
+        }
+        u8g2.print(wifiHour);
+        u8g2.print(":");
+        if (wifiMinute <= 9) {
+          u8g2.print("0");
+        }
+        u8g2.print(wifiMinute);
+        u8g2.print(":");
+        if (wifiSecond <= 9) {
+          u8g2.print("0");
+        }
+        u8g2.print(wifiSecond);
+
+        u8g2.setCursor(0, 55);
+        if (wifiWeekDay == 1) {
+          u8g2.print("MO ");
+        }
+        else if (wifiWeekDay == 2) {
+          u8g2.print("DI ");
+        }
+        else if (wifiWeekDay == 3) {
+          u8g2.print("MI ");
+        }
+        else if (wifiWeekDay == 4) {
+          u8g2.print("DO ");
+        }
+        else if (wifiWeekDay == 5) {
+          u8g2.println("FR ");
+        }
+        else if (wifiWeekDay == 6) {
+          u8g2.print("SA ");
+        }
+        else if (wifiWeekDay == 7) {
+          u8g2.print("SO ");
+        }
+        u8g2.print(wifiDD);
+        u8g2.print(".");
+        u8g2.print(wifiMM);
+        u8g2.print(".");
+        u8g2.print(wifiYYYY);
+
+        u8g2.setCursor(65, 24);
+        u8g2.print("T:");
+        u8g2.print(newtemp, 1);
+
+#ifndef Temp_F
+        u8g2.print(" C");
+#endif
+#ifdef Temp_F
+        u8g2.print(" F");
+#endif
+
+#ifdef DHTsensor
+        u8g2.setCursor(65, 40);
+        u8g2.print("Hm:");
+        u8g2.print(newhum, 0);
+        u8g2.print(" %");
+#endif
+      }
+
+      else if (wifiState == 1)  {
+        u8g2.setFont(u8g2_font_ncenB10_tr);
+        u8g2.setCursor(0, 24);
+        u8g2.print("WIFI OFFLINE");
+      }
+      else if (wifiState == 0) {
+        u8g2.setFont(u8g2_font_ncenB10_tr);
+        u8g2.setCursor(0, 24);
+        u8g2.print("WIFI FOUND");
+      }
+
+
+#endif
+    }
+
+
+  } while ( u8g2.nextPage() );
+
+
+
+}
+#endif
+
+#ifdef WIFI
+void wifiupdate(unsigned char src, char command, unsigned char len, char *data) {
+
+  wifimodule = 1; //module checked in
+
+  struct dataStruct *myData = (struct dataStruct *)data;
+
+  if ((myData->hh == 0) && (myData->mm == 0) && (myData->ss == 0)) {
+    wifiState = 0; //concider offline yet
+    Serial.println("Found a module but Data not valid yet");
+  }
+  else {
+
+
+    wifiPacket = myData->Packet;
+    wifiHour = myData->hh;
+    wifiHour = wifiHour + UTCoffset; //applying user offset
+    wifiMinute = myData->mm;
+    wifiSecond = myData->ss;
+    wifiWeekDay = myData->WeekDay;
+    wifiDD = myData->DD;
+    wifiMM = myData->MM;
+    wifiYYYY = myData->YY;
+    wifiState = myData->ModuleStatus;
+
+    oldwifiPacket = wifiPacket;
+
+
+    if ((newhour != wifiHour) && (wifiYYYY != 0)) { //Set RTC every HOUR if it has data
+      
+      //set the RTC:
+      //setTime(wifiHour, wifiMinute, wifiSecond, wifiDD, wifiMM, wifiYYYY); //rtc.setTime(byte hours, byte minutes, byte seconds)
+      //RTC.set(now());
+
+      Serial.print("RTC SET TO WIFI-TIME:");
+      Serial.print(wifiHour); //Hours
+      Serial.print(":");
+      Serial.print(wifiMinute); //Minutes
+      Serial.print(":");
+      Serial.println(wifiSecond); //Seconds
+
+      newhour = wifiHour;
+      tone(buzzer, 500, 500);
+    }
+
+    return;
+  }
+}
+
+void checktimeout() {
+
+  if (wifimodule == 1) {
+    unsigned long currentTimeoutMillis = millis();
+
+    if (currentTimeoutMillis - previousTimeoutMillis >= 1000) {
+      previousTimeoutMillis = currentTimeoutMillis;
+
+      oldwifiPacket = oldwifiPacket + 1; //increase the count each run
+
+      if (oldwifiPacket > 6) { //dont start right away
+        Packetdelta = oldwifiPacket - wifiPacket;
+
+        if (Packetdelta > 6) { //if missed 5 packets
+          wifimodule = 0;
+          wifiState = 0;
+          oldwifiPacket = 0;
+          Serial.println("WIFI MODULE DISCONNECTED:");
+          
+          //Reset WIFI packet data
+          wifiPacket = 0; 
+          wifiHour = 0; 
+          wifiMinute = 0;
+          wifiSecond = 0;
+          wifiWeekDay = 0; 
+          wifiDD = 0; 
+          wifiMM = 0; 
+          wifiYYYY = 0;
+          newhour = 0;
+        }
+        else if (Packetdelta > 50) {
+          Packetdelta = 10;
+        }
+
+        else {
+          wifimodule = 1;
+        }
+
+      }
+    }
+    //Serial.print("Packetdelta:");
+    //Serial.println(Packetdelta);
+  }
+
+
+
+}
+
+
+#endif
