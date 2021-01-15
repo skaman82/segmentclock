@@ -45,10 +45,8 @@
 #define LightSensor   //An external photo-resistor can automatically adjust brightness of the clock
 //#define DHTsensor     //The DHT sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
 #define WIFI          //ESP8266 S01 Module can sync time over WIFI
+#define OLED          //OLED SCEEN < WORK IN PROGRESS
 
-#define OLED        //OLED SCEEN < WORK IN PROGRESS
-
-//#define IRCONTROL     //TODO: IR REMOTE
 //#define RAD           //TODO: RADIO MODULE - Requres OLED & IRCONTROL option
 //#define AudioSensor   //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
 //==================================================================================================================
@@ -83,9 +81,8 @@ TEA5767 radio;    // Create an instance of Class for Si4703 Chip
 #include <Wire.h>
 #include <EEPROM.h>
 #include <Adafruit_NeoPixel.h> //Adafruit NeoPixel
-#include <TimeLib.h> //https://github.com/PaulStoffregen/Time
-#include <DS3232RTC.h> // https://github.com/JChristensen/DS3232RTC
-
+#include "RTClib.h"
+RTC_DS3231 rtc;
 
 #ifdef OLED
 
@@ -96,14 +93,13 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 #endif
 
 #ifdef WIFI
-
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h> //testing only
 #include <ICSC.h>
+//SoftwareSerial mySerial(11, 10); // RX, TX > UNCOMMENT IF YOU HARDWARE HAS A SECOND SERIAL
 
-SoftwareSerial mySerial(2, 10); // RX, TX > UNCOMMENT IF YOU HARDWARE HAS A SECOND SERIAL
-ICSC icsc(mySerial, 'B');  //Use sostserial
+//ICSC icsc(mySerial, 'B');  //Use softserial (breaks the LEDs on Nano)
+ICSC icsc(Serial, 'B');  //MAIN UART
 //ICSC icsc(Serial1, 'B');  //Use port 1 on a Leonardo or ATmega644p
-
 
 byte newhour = 0;
 unsigned long wifiPacket = 0; //packets
@@ -146,9 +142,9 @@ struct dataStruct {
 #define bt_dwn          6   //Button down
 #define DHTPIN          7   //AUX2 pad (DHT22 out) 
 #define buzzer          9   //Speaker
-#define vbat            A0  //RTC Battery Monitoring
+#define vbat            A0  //RTC Battery Monitoring //can be left
 #define lightsens       A1  //Photo Resistor 
-#define mic             A2  //AUX1 pad - Microphone 
+//#define mic             A2  //AUX1 pad - Microphone //dont have to be analog
 #define colorADDR       1   // EEPROM Adress
 #define animationADDR   2   // EEPROM Adress
 #define alarmStateADDR  3   // EEPROM Adress
@@ -183,14 +179,15 @@ float newtemp = 0;
 float newhum = 0;
 int16_t digittemp = 0;
 int16_t digithum = 0;
+char daysOfTheWeek[7][12] = {"SO", "MO", "DI", "MI", "DO", "FR", "SA"};
 
 
 byte brightness = 0;
 byte old_brightness = 0;
 byte volume = 0;
 byte old_volume = 0;
-byte colorset = 1;
-byte old_colorset = 2;
+byte colorset = 0;
+byte old_colorset = 5;
 
 
 unsigned long previousMillis = 0; // will store last time LED was updated
@@ -222,7 +219,8 @@ void setup() {
   pinMode(bt_dwn, INPUT_PULLUP);  //BUTTON
 
   pixels.begin(); // This initializes the NeoPixel library.
-  pixels.show(); // This initializes the NeoPixel library.
+  wipe(); // wipes the LED buffers
+
 
 #ifdef LightSensor
   pinMode(lightsens, INPUT);      //PHOTO SENSOR
@@ -237,8 +235,9 @@ void setup() {
 
 
 #ifdef WIFI
-  mySerial.begin(115200);
+  //mySerial.begin(115200);
   //Serial1.begin(115200); Use port 1 on a Leonardo or ATmega644p
+  
   icsc.begin();
   icsc.registerCommand('U', &wifiupdate);
 #endif
@@ -248,16 +247,36 @@ void setup() {
 #endif
 
   //RTC.begin(); //only for non AVR Boards
-  setSyncProvider(RTC.get);   // the function to get the time from the RTC
+  RTC_DS3231 rtc;
+  //setSyncProvider(RTC.get);   // the function to get the time from the RTC
 
-  if (timeStatus() != timeSet)
-    Serial.println("Unable to sync with the RTC");
-  else
-    Serial.println("RTC has set the system time");
+  if (! rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    abort();
+  }
+
+  if (rtc.lostPower()) {
+    Serial.println("RTC lost power, let's set the time!");
+    // When time needs to be set on a new device, or after a power loss, the
+    // following line sets the RTC to the date & time this sketch was compiled
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    // This line sets the RTC with an explicit date & time, for example to set
+    // January 21, 2014 at 3am you would call:
+    // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+  }
+
+  // When time needs to be re-set on a previously configured device, the
+  // following line sets the RTC to the date & time this sketch was compiled
+  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // This line sets the RTC with an explicit date & time, for example to set
+  // January 21, 2014 at 3am you would call:
+  // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+  
 
   //Get data from EEPROM
   colorset = EEPROM.read(colorADDR);
-  if (colorset > 8) {
+  if (colorset > 9) {
     colorset = 0;
   }
 #ifdef OLED
@@ -271,6 +290,8 @@ void setup() {
   radio.setVolume(volume);
   radio.setMono(false);
 #endif
+
+
 
 }
 
@@ -336,53 +357,47 @@ byte buttoncheck()
 //==================================================================================================================
 void loop() {
 
-  ledcontrol();
+     buttoncheck();
+     
 
-  if (wifimodule == 0) {
-    // Serial.println("NO WIFI MODULE FOUND");
-  }
+     if (colorset == 0) {
+     color_rainbowcycle();
+     }
+     else if (colorset == 1) { 
+     color_rainbow(); 
+     }
+     else if (colorset == 2) { 
+     color_cyber(); 
+     }
+     else if (colorset == 3) { 
+     color_white(); 
+     }
+     else if (colorset == 4) { 
+     color_pink(); 
+     }
+     else if (colorset == 5) { 
+     color_velvet();  
+     }
+     else if (colorset == 6) { 
+     color_red();
+     }
+     else if (colorset == 7) { 
+     color_green();  
+     }
+     else if (colorset == 8) { 
+     color_blue(); 
+     }
+     else if (colorset == 9) { 
+     color_cyan();
+     }
+     
+    
 
-  //sync time every five minutes
-  unsigned long currentUpdateMillis = millis();
-  if (currentUpdateMillis - previousUpdateMillis >= 1000) {
-    previousUpdateMillis = currentUpdateMillis;
-
-
-    // do stuff every second
-
-  }
-}
-
-
-
-
-
-//LED CODE
-//==================================================================================================================
-void ledcontrol() {
-  uint16_t i, j;
-  for (j = 0; j < 256; j++) { // cycle of all colors on wheel
-
-    buttoncheck();
-
-
-    getTempHum();
-
-#ifdef OLED
-
-    PopUphandler();
-    //OLEDdraw();
-
-
-#endif
 
 #ifdef WIFI
     icsc.process();
     checktimeout();
 #endif
-
-
-
 
 
     if (pressedbut == 1) {
@@ -391,7 +406,7 @@ void ledcontrol() {
         Serial.println(colorset);
       }
       else {
-        colorset = 0;
+        //colorset = 0;
         Serial.println(colorset);
       }
     }
@@ -428,16 +443,16 @@ void ledcontrol() {
     }
     if (pressedbut == 5) {
       //get current time for the setting menu
-      newhours = hour();
-      newminutes = minute();
+      DateTime now = rtc.now();
+      newhours = now.hour();
+      newminutes = now.minute();
       menu = 1;
       settime();
     }
 
     if (page == 0) {
-
       // check if animation is triggered
-
+      
       if (animateflag == 0) {
         updateNumber();
       }
@@ -454,61 +469,54 @@ void ledcontrol() {
       showhumidity();
     }
 
+  
+  OLEDdraw();
+  PopUphandler();  
+  getTempHum();
 
-    if (colorset == 0) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, Wheel(((i * 256 / pixels.numPixels()) + j) & 255));
-        pixels.setPixelColor(28, Wheel((((i * 256 / pixels.numPixels()) + j) & 255) + 80)); //color offset fpr the dot pixels
-        pixels.setPixelColor(29, Wheel((((i * 256 / pixels.numPixels()) + j) & 255) + 80)); //color offset fpr the dot pixels
-      }
-    }
+  //delay(100);
+}
 
-    else if (colorset == 1) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, Wheel((i + j) & 255));
-      }
-    }
-    else if (colorset == 2) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, 255, 255, 255);
-      }
-    }
-    else if (colorset == 3) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, 255, 0, 0);
-      }
-    }
 
-    else if (colorset == 4) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, 0, 255, 0);
-      }
-    }
 
-    else if (colorset == 5) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, 0, 0, 255);
-      }
-    }
-    else if (colorset == 6) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, 255, 0, 255);
-      }
-    }
-    else if (colorset == 7) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, 255, 255, 0);
-      }
-    }
-    else if (colorset == 8) {
-      for (i = 0; i < pixels.numPixels(); i++) {
-        pixels.setPixelColor(i, 0, 255, 255);
-      }
-    }
-    else if (colorset == 9) {
-      for (i = 0; i < pixels.numPixels(); i++) {
 
-        uint32_t mint = pixels.Color(0, 250, 180);
+
+//LED CODE
+//==================================================================================================================
+
+
+void color_rainbow() { // modified from Adafruit example to make it a state machine
+  static uint16_t j=0;
+    for(int i=0; i<pixels.numPixels(); i++) {
+      pixels.setPixelColor(i, Wheel((i+j) & 255));
+    }
+    
+    mapPixels();
+    setbrightness();    
+    
+    pixels.show();
+    
+     j++;
+  if(j >= 256) j=0;   
+}
+
+void color_rainbowcycle() { 
+  static uint16_t j=0;
+    for(int i=0; i< pixels.numPixels(); i++) {
+      pixels.setPixelColor(i, Wheel(((i * 256 / pixels.numPixels()) + j) & 255));
+    }
+    mapPixels();
+    setbrightness();    
+    
+    pixels.show();
+    
+  j++;
+  if(j >= 256*5) j=0;
+}
+void color_cyber() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+
+        uint32_t mint = pixels.Color(0, 250, 180); //CYBER
         uint32_t green = pixels.Color(50, 250, 50);
         uint32_t yellow = pixels.Color(250, 200, 0);
         uint32_t pink = pixels.Color(255, 0, 255);
@@ -520,24 +528,76 @@ void ledcontrol() {
         pixels.fill(green, 21, 28);
         pixels.fill(mint, 28, 30);
       }
-    }
-
-
-    mapPixels();
-    setbrightness();
-
-
-
+      mapPixels();
+      setbrightness();    
+     
+      pixels.show();
+      
+}
+void color_red() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+        pixels.setPixelColor(i, 255, 0, 0); //red
+      }
+      mapPixels();
+      setbrightness();    
     pixels.show();
-    //Serial.print("loop");
-    delay(100); //test
-  }
-
-  return;
+}
+void color_green() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+        pixels.setPixelColor(i, 0, 255, 0); //green
+      }
+      mapPixels();
+      setbrightness();    
+    pixels.show();
+}
+void color_blue() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+        pixels.setPixelColor(i, 0, 0, 255); //blue
+      }
+      mapPixels();
+      setbrightness();    
+    pixels.show();
+}
+void color_white() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+        pixels.setPixelColor(i, 255, 255, 255); //white
+      }
+      mapPixels();
+      setbrightness();    
+    pixels.show();
+}
+void color_pink() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+        pixels.setPixelColor(i, 255, 0, 255); //pink
+      }
+      mapPixels();
+      setbrightness();    
+    pixels.show();
+}
+void color_velvet() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+        pixels.setPixelColor(i, 255, 255, 0); //velvet
+      }
+      mapPixels();
+      setbrightness();    
+    pixels.show();
+}
+void color_cyan() { 
+  for (int i = 0; i < pixels.numPixels(); i++) {
+        pixels.setPixelColor(i, 0, 255, 255); //cyan
+      }
+      mapPixels();
+      setbrightness();    
+    pixels.show();
 }
 
 
-
+void wipe(){ // clear all LEDs
+     for(int i=0;i<pixels.numPixels();i++){
+       pixels.setPixelColor(i, pixels.Color(0,0,0)); 
+       
+       }
+}
 
 
 //DIGIT MAPPINGS
@@ -860,6 +920,9 @@ void setbrightness() {
 
   lightvalue = map(lightvalue, 40, 1000, 50, 255);
   pixels.setBrightness(lightvalue); //regulates the brightness of the whole strip
+  #ifdef OLED
+  u8g2.setContrast(lightvalue); //set brightness of the OLED
+  #endif
 #endif
 #ifndef LightSensor
   pixels.setBrightness(255); //max brightness if "LightSensor" not defined
@@ -888,24 +951,27 @@ void updateNumber() {
     //Serial.println(tm.Second,DEC);
 
 
+    DateTime now = rtc.now();
+    
+    
+    number_hour2 = (now.hour() % 10); //last digit of the hours
+    
 
-    number_hour2 = (hour() % 10); //last digit of the hours
-
-    if (hour() < 10) {
+    if (now.hour() < 10) {
       number_hour1 = 0;
     }
     else {
-      number_hour1 = (hour() / 10U) % 10; //first digit of the hours
+      number_hour1 = (now.hour() / 10U) % 10; //first digit of the hours
     }
 
-    number_min2 = (minute() % 10); //last digit of the seconds
+    number_min2 = (now.minute() % 10); //last digit of the seconds
 
 
-    if (minute() < 10) {
+    if (now.minute() < 10) {
       number_min1 = 0;
     }
     else {
-      number_min1 = (minute() / 10U) % 10; //first digit of the seconds
+      number_min1 = (now.minute() / 10U) % 10; //first digit of the seconds
     }
 
 
@@ -962,6 +1028,7 @@ void updateNumber() {
 
 
 void getTempHum() {
+
   unsigned long currentUpdateMillis = millis();
 
   if (currentUpdateMillis - previousUpdateMillis >= 1000) { //was1000
@@ -970,8 +1037,9 @@ void getTempHum() {
     if (tempsamplecount < 5) {
 
 #ifndef DHTsensor
-      int16_t rtcTemp = RTC.temperature();
-      float c = rtcTemp / 4.; //convert to celsius
+      int16_t rtcTemp = rtc.getTemperature();
+      float c = rtcTemp;
+      //float c = rtcTemp / 4.; //convert to celsius
 
 #ifdef Temp_F
       c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
@@ -989,7 +1057,7 @@ void getTempHum() {
 
       if (isnan(c)) {
         Serial.println(F("Failed to read from DHT sensor!"));
-        return;
+        //return;
       }
 
       //Serial.print(F("Sensor Humidity: "));
@@ -1011,6 +1079,7 @@ void getTempHum() {
 #endif
 
       tempsamplecount++;
+      //Serial.println(tempsamplecount);
     }
 
     //get the avarege of the five measurements
@@ -1044,6 +1113,8 @@ void getTempHum() {
 
 
   }
+  
+return;
 
 }
 
@@ -1198,7 +1269,12 @@ void settime() {
 
 
     if (pressedbut == 5) {
-      setTime(newhours, newminutes, 0, 30, 12, 2020); //rtc.setTime(byte hours, byte minutes, byte seconds)
+      
+      //FIXME set date
+      rtc.adjust(DateTime(2020, 12, 30, newhours, newminutes, 0));
+      DateTime now = rtc.now();
+      
+      //setTime(newhours, newminutes, 0, 30, 12, 2020); //rtc.setTime(byte hours, byte minutes, byte seconds)
       //RTC.set(now());
       Serial.println("new time saved");
       menu = 0;
@@ -1244,13 +1320,15 @@ void animate() {
 
         //animation every minute
         if (animationsetting == 1) {
-          number_min2 = (minute() % 10); //second digit of the seconds
+          DateTime now = rtc.now();
+          number_min2 = (now.minute() % 10); //second digit of the seconds
           digitbuffer = number_min2;
         }
 
         //animation every 10 minutes
         else if (animationsetting == 2) {
-          number_min1 = (minute() / 10U) % 10;  //first digit of the seconds
+          DateTime now = rtc.now();
+          number_min1 = (now.minute() / 10U) % 10;  //first digit of the seconds
           digitbuffer = number_min1;
         }
 
@@ -1291,29 +1369,28 @@ void printDigits(int digits)
 //COLORWHEEL
 //==================================================================================================================
 uint32_t Wheel(byte WheelPos) {
-
   WheelPos = 255 - WheelPos;
-  if (WheelPos < 85) {
+  if(WheelPos < 85) {
     return pixels.Color(255 - WheelPos * 3, 0, WheelPos * 3);
   }
-  if (WheelPos < 170) {
+  if(WheelPos < 170) {
     WheelPos -= 85;
     return pixels.Color(0, WheelPos * 3, 255 - WheelPos * 3);
   }
   WheelPos -= 170;
   return pixels.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-
 }
 
 #ifdef OLED
 void PopUphandler() {
 
   if (colorset != old_colorset) {
-    Serial.println("color-pop triggered");
     popup = 1;
+    Serial.print("color-pop triggered:");
+    old_colorset = colorset;
     colorpopup();
     delay(1000);
-    old_colorset = colorset;
+    Serial.println(old_colorset);
     popup = 0;
   }
 
@@ -1336,9 +1413,8 @@ void PopUphandler() {
   }
 
   else {
-    popup = 0;
+    
     OLEDdraw();
-    return;
   }
 }
 
@@ -1389,7 +1465,6 @@ void volumepopup() {
 
 void OLEDdraw() {
 
-
   //Serial.print("wifiState:");
   //Serial.println(wifiState);
   //Serial.print("module:");
@@ -1397,9 +1472,11 @@ void OLEDdraw() {
 
 
   u8g2.firstPage();
+  
+  
   do {
 
-
+      DateTime now = rtc.now();
 
     if (wifimodule == 0) {
       u8g2.setFont(u8g2_font_ncenB10_tr);
@@ -1408,27 +1485,29 @@ void OLEDdraw() {
 
       u8g2.setFont(u8g2_font_ncenB10_tr);
       u8g2.setCursor(0, 40);
-      if (hour() <= 9) {
+      if (now.hour() <= 9) {
         u8g2.print("0");
       }
-      u8g2.print(hour());
+      u8g2.print(now.hour());
       u8g2.print(":");
-      if (minute() <= 9) {
+      if (now.minute() <= 9) {
         u8g2.print("0");
       }
-      u8g2.print(minute());
+      u8g2.print(now.minute());
       u8g2.print(":");
-      if (second() <= 9) {
+      if (now.second() <= 9) {
         u8g2.print("0");
       }
-      u8g2.print(second());
+      u8g2.print(now.second());
 
       u8g2.setCursor(0, 55);
-      u8g2.print(day());
+      u8g2.print(daysOfTheWeek[now.dayOfTheWeek()]);
+      u8g2.print(" ");
+      u8g2.print(now.day());
       u8g2.print(".");
-      u8g2.print(month());
+      u8g2.print(now.month());
       u8g2.print(".");
-      u8g2.print(year());
+      u8g2.print(now.year());
 
       u8g2.setCursor(65, 24);
       u8g2.print("T:");
@@ -1541,6 +1620,7 @@ void OLEDdraw() {
     }
 
 
+
   } while ( u8g2.nextPage() );
 
 
@@ -1579,8 +1659,9 @@ void wifiupdate(unsigned char src, char command, unsigned char len, char *data) 
     if ((newhour != wifiHour) && (wifiYYYY != 0)) { //Set RTC every HOUR if it has data
       
       //set the RTC:
-      //setTime(wifiHour, wifiMinute, wifiSecond, wifiDD, wifiMM, wifiYYYY); //rtc.setTime(byte hours, byte minutes, byte seconds)
-      //RTC.set(now());
+      
+      rtc.adjust(DateTime(wifiYYYY, wifiMM, wifiDD, wifiHour, wifiMinute, wifiSecond));
+      DateTime now = rtc.now();
 
       Serial.print("RTC SET TO WIFI-TIME:");
       Serial.print(wifiHour); //Hours
