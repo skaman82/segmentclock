@@ -414,14 +414,12 @@ void loop() {
 
   if (pressedbut == 1) {
     
-    stepcounter = 0;
+    //stepcounter = 0;
     if (colorset < 8) {
       colorset = colorset + 1;
-      //Serial.println(colorset);
     }
     else {
       colorset = 0;
-      //Serial.println(colorset);
     }
   }
   if (pressedbut == 3) {
