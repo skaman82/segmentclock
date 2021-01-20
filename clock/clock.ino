@@ -91,8 +91,8 @@ RTC_DS3231 rtc;
 
 #ifdef OLED
 
-U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
-//U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+//U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 //U8G2_SSD1306_96X16_ER_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // EastRising 0.69" OLED
 //U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
@@ -195,6 +195,7 @@ float newtemp = 0;
 float newhum = 0;
 int16_t digittemp = 0;
 int16_t digithum = 0;
+
 char daysOfTheWeek[7][12] = {"SO", "MO", "DI", "MI", "DO", "FR", "SA"};
 
 byte alarmset = 0;
@@ -216,6 +217,10 @@ unsigned long previousUpdateMillis = 0;  // Sensor Update Timer
 unsigned long previousTimeoutMillis = 0;  // Timeout Timer
 unsigned long previousPageMillis = 0;  // Timeout Timer
 unsigned long previousPopupMillis = 0;  // Timeout Timer
+
+
+unsigned long patternInterval = 25 ; // time between steps in the pattern
+unsigned long lastUpdate = 0 ; // for millis() when last update occoured
 
 int popcounter = 0;
 
@@ -261,10 +266,6 @@ void setup() {
   pinMode(mic, INPUT);            //AUDIO SENSOR
 #endif
 
-
-
-
-
 #ifdef OLED
   u8g2.begin();
   delay(50);
@@ -279,7 +280,6 @@ void setup() {
 #ifdef WIFI
   //mySerial.begin(115200);
   //Serial1.begin(115200); Use port 1 on a Leonardo or ATmega644p
-
   icsc.begin();
   icsc.registerCommand('U', &wifiupdate);
 #endif
@@ -305,12 +305,6 @@ void setup() {
     // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
   }
 
-  // When time needs to be re-set on a previously configured device, the
-  // following line sets the RTC to the date & time this sketch was compiled
-  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  // This line sets the RTC with an explicit date & time, for example to set
-  // January 21, 2014 at 3am you would call:
-  // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
 
 
   rtc.disable32K();
@@ -341,7 +335,7 @@ void setup() {
     alarmset = 0;
   }
 
-  Serial.print("Saved Alarm:");
+  Serial.print("Saved alarm time: ");
   Serial.print(alarmhours);
   Serial.print(":");
   Serial.println(alarmminutes);
@@ -377,6 +371,13 @@ void setup() {
 }
 
 
+
+
+void wipe(){ // clear all LEDs
+     for(int i=0;i<pixels.numPixels();i++){
+       pixels.setPixelColor(i, pixels.Color(0,0,0)); 
+       }
+}
 
 
 
@@ -445,40 +446,19 @@ byte buttoncheck()
 void loop() {
 
 
+ static int pattern = 0, lastReading;
+if(millis() - lastUpdate > patternInterval) updatePattern(pattern);
+
+
+
+
+
   buttoncheck();
+ 
   PopUphandler();
 
 
-  if (colorset == 0) {
-    color_rainbowcycle();
-  }
-  else if (colorset == 1) {
-    color_rainbow();
-  }
-  else if (colorset == 2) {
-    color_cyber();
-  }
-  else if (colorset == 3) {
-    color_white();
-  }
-  else if (colorset == 4) {
-    color_pink();
-  }
-  else if (colorset == 5) {
-    color_velvet();
-  }
-  else if (colorset == 6) {
-    color_red();
-  }
-  else if (colorset == 7) {
-    color_green();
-  }
-  else if (colorset == 8) {
-    color_blue();
-  }
-  else if (colorset == 9) {
-    color_cyan();
-  }
+  
 
 
 
@@ -669,10 +649,54 @@ void loop() {
 
 
   getTempHum();
-  setbrightness();
   decodeIR();
   //pixels.show();
 }
+
+
+
+
+
+void  updatePattern(int pat) { // call the pattern currently being created
+
+   setbrightness();
+   
+  //button actions here
+  
+ if (colorset == 0) {
+    color_rainbowcycle();
+  }
+  else if (colorset == 1) {
+    color_rainbow();
+  }
+  else if (colorset == 2) {
+    color_cyber();
+  }
+  else if (colorset == 3) {
+    color_white();
+  }
+  else if (colorset == 4) {
+    color_pink();
+  }
+  else if (colorset == 5) {
+    color_velvet();
+  }
+  else if (colorset == 6) {
+    color_red();
+  }
+  else if (colorset == 7) {
+    color_green();
+  }
+  else if (colorset == 8) {
+    color_blue();
+  }
+  else if (colorset == 9) {
+    color_cyan();
+  }
+      
+  }  
+
+
 
 
 
@@ -683,36 +707,27 @@ void loop() {
 
 
 void color_rainbow() { // modified from Adafruit example to make it a state machine
-  static uint16_t j = 0;
-  for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, Wheel((i + j) & 255));
-  }
-
-  mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
-  pixels.show();
-
-  j++;
-  if (j >= 256) j = 0;
+static uint16_t j=0;
+    for(int i=0; i<pixels.numPixels(); i++) {
+      pixels.setPixelColor(i, Wheel((i+j) & 255));
+    }
+    mapPixels();
+    pixels.show();
+     j++;
+  if(j >= 256) j=0;
+  lastUpdate = millis(); // time for next change to the display
 }
 
 void color_rainbowcycle() {
-  static uint16_t j = 0;
-  for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, Wheel(((i * 256 / pixels.numPixels()) + j) & 255));
-  }
-  mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
-  pixels.show();
-
+  static uint16_t j=0;
+    for(int i=0; i< pixels.numPixels(); i++) {
+      pixels.setPixelColor(i, Wheel(((i * 256 / pixels.numPixels()) + j) & 255));
+    }
+    mapPixels();
+    pixels.show();
   j++;
-  if (j >= 256 * 5) j = 0;
+  if(j >= 256*5) j=0;
+  lastUpdate = millis(); // time for next change to the display
 }
 void color_cyber() {
   for (int i = 0; i < pixels.numPixels(); i++) {
@@ -730,11 +745,9 @@ void color_cyber() {
     pixels.fill(mint, 28, 30);
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
 
 }
 void color_red() {
@@ -742,86 +755,74 @@ void color_red() {
     pixels.setPixelColor(i, 255, 0, 0); //red
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
+
 }
 void color_green() {
   for (int i = 0; i < pixels.numPixels(); i++) {
     pixels.setPixelColor(i, 0, 255, 0); //green
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
+
 }
 void color_blue() {
   for (int i = 0; i < pixels.numPixels(); i++) {
     pixels.setPixelColor(i, 0, 0, 255); //blue
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
+
 }
 void color_white() {
   for (int i = 0; i < pixels.numPixels(); i++) {
     pixels.setPixelColor(i, 255, 255, 255); //white
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
+
 }
 void color_pink() {
   for (int i = 0; i < pixels.numPixels(); i++) {
     pixels.setPixelColor(i, 255, 0, 255); //pink
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
+
 }
 void color_velvet() {
   for (int i = 0; i < pixels.numPixels(); i++) {
     pixels.setPixelColor(i, 255, 255, 0); //velvet
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
+
 }
 void color_cyan() {
   for (int i = 0; i < pixels.numPixels(); i++) {
     pixels.setPixelColor(i, 0, 255, 255); //cyan
   }
   mapPixels();
-  //setbrightness();
-#ifndef OLED
-  delay(40); //testing
-#endif
   pixels.show();
+  
+  lastUpdate = millis(); // time for next change to the display
+
 }
 
 
-void wipe() { // clear all LEDs
-  for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, pixels.Color(0, 0, 0));
 
-  }
-}
 
 
 //DIGIT MAPPINGS
@@ -1865,8 +1866,6 @@ void printDigits(int digits)
 
 
 
-
-
 //COLORWHEEL
 //==================================================================================================================
 uint32_t Wheel(byte WheelPos) {
@@ -1885,12 +1884,19 @@ uint32_t Wheel(byte WheelPos) {
 
 void PopUphandler() {
 
+  #ifndef OLED
+  int poptime = 4000;
+  #endif
+  #ifdef OLED
+  int poptime = 100;
+  #endif
+  
   if (popup == 1) {
     popcounter++;
     #ifdef OLED
     delay(15);
     #endif
-  if (popcounter >= 100) {
+  if (popcounter >= poptime) {
       //popup timeout
       Serial.println("Popup timeout");
       EEPROM.write(colorADDR, colorset);
@@ -1937,9 +1943,7 @@ void PopUphandler() {
 
 
 
-#ifndef OLED
-  //popup = 0;
-#endif
+
 
   exit;
 
