@@ -2,8 +2,8 @@
 //==================================================================================================================
 // TODOS
 // X WIFI Module Sync (done)
-// - Alarm setting support()
-// - EEPROM support() & menus for Animation() + Color()
+// X Alarm setting support()
+// X EEPROM support() & menus for Animation() + Color()
 // - Radio support()
 // - RTC battery alarm()
 // - Microphone support()
@@ -40,20 +40,22 @@
 //OPTIONAL USER CONFIG START
 //==================================================================================================================
 #define DEBUG           //SERIAL OUTPUT
-//#define AUTOROTATION    //Sliding Digits (Time > Temp > Humidity >)
+#define AUTOROTATION    //Sliding Digits (Time > Temp > Humidity >)
 
 #define LightSensor     //An external photo-resistor can automatically adjust brightness of the clock
 #define DHTsensor       //The DHT sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
-#define WIFI            //ESP-01 Module can sync time over WIFI. Requires OLED to show weather data. See separate ESP01 code.
+//#define WIFI            //ESP-01 Module can sync time over WIFI. Requires OLED to show weather data. See separate ESP01 code.
 //#define OLED            //OLED SCEEN < WORK IN PROGRESS
 
+//#define IR
 //#define RAD           //TODO: RADIO MODULE - Requres OLED & IRCONTROL option
+
 //#define AudioSensor   //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
 //==================================================================================================================
 
 #ifdef DHTsensor
 #include <DHT.h>            //"Adafruit DHT" + "Ardafruit Unified Sensor" libraries required;
-#define DHTTYPE DHT22       // DHT 22   (AM2302), AM2321
+#define DHTTYPE DHT22       // DHT 11/22   (AM2302), AM2321
 #endif
 //#define Temp_F              //Teperature will be converted from C to F
 #ifdef WIFI
@@ -67,12 +69,15 @@ float humidityoffset   =   +1.0;   //+1 Humidity adjustment (positive or negativ
 //USER CONFIG END
 //==================================================================================================================
 
+
+
 #ifdef RAD
 #include <radio.h>
-#include <TEA5767.h>
+#include <si4703.h>
 #define FIX_BAND RADIO_BAND_FM
-#define FIX_STATION 8930
-TEA5767 radio;    // Create an instance of Class for Si4703 Chip
+#define FIX_STATION  10360            ///< The station that will be tuned by this sketch is 89.30 MHz.
+#define FIX_VOLUME   4               ///< The volume that will be set by this sketch is level 4.
+SI4703 radio;    // Create an instance of Class for Si4703 Chip
 #endif
 
 #ifdef OLED
@@ -87,10 +92,15 @@ RTC_DS3231 rtc;
 #ifdef OLED
 
 U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+//U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+
 //U8G2_SSD1306_96X16_ER_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // EastRising 0.69" OLED
 //U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
 
 #endif
+
+
+
 
 #ifdef WIFI
 //#include <SoftwareSerial.h> //testing only
@@ -135,8 +145,9 @@ struct dataStruct {
 //#define serial //Debug data over Serial
 
 
-#define LEDPIN          3   //was 3
-#define IRPIN           2   //was 3
+#define stateLED       13   //Status LED 
+#define LEDPIN          3   //LED STRIP 
+#define RECV_PIN        10  //
 #define bt_up           4   //Button up
 #define bt_set          5   //Button set
 #define bt_dwn          6   //Button down
@@ -172,6 +183,10 @@ byte digitbuffer = 0;
 byte dot = 0;
 byte newhours;
 byte newminutes;
+byte alarmhours;
+byte alarmminutes;
+byte newalarmminutes;
+byte newalarmhours;
 int lightvalue;
 byte tempsamplecount = 0;
 float buffertemp = 0;
@@ -182,13 +197,17 @@ int16_t digittemp = 0;
 int16_t digithum = 0;
 char daysOfTheWeek[7][12] = {"SO", "MO", "DI", "MI", "DO", "FR", "SA"};
 
+byte alarmset = 0;
+byte alarmstate = 0;
 
 byte brightness = 0;
 byte old_brightness = 0;
 byte volume = 0;
 byte old_volume = 0;
 byte colorset = 0;
-byte old_colorset = 5;
+byte old_colorset = 0;
+byte b = 0; //brightness
+byte d = 0; //brightness direction
 
 
 unsigned long previousMillis = 0; // will store last time LED was updated
@@ -198,15 +217,21 @@ unsigned long previousTimeoutMillis = 0;  // Timeout Timer
 unsigned long previousPageMillis = 0;  // Timeout Timer
 unsigned long previousPopupMillis = 0;  // Timeout Timer
 
+int popcounter = 0;
 
 const long interval = 1000; // interval at which to blink (milliseconds)
 const long animinterval = 100;  // interval for the slot-effect (milliseconds)
+long rotationtime = 20000;
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LEDPIN, NEO_GRB + NEO_KHZ800);
 #ifdef DHTsensor
 DHT dht(DHTPIN, DHTTYPE);
 #endif
 
+
+#ifdef IR
+
+#endif
 
 
 
@@ -215,8 +240,11 @@ void setup() {
   Serial.begin(115200);
 #endif
 
-  //  pinMode(vbat, INPUT);           //RTC Battery voltage
+  pinMode(vbat, INPUT);           //RTC Battery voltage
+  pinMode(RECV_PIN, INPUT);
+  pinMode(DHTPIN, INPUT);
   pinMode(buzzer, OUTPUT);        //SPEAKER
+  pinMode(stateLED, OUTPUT);        //LED
   pinMode(bt_up, INPUT_PULLUP);   //BUTTON
   pinMode(bt_set, INPUT_PULLUP);  //BUTTON
   pinMode(bt_dwn, INPUT_PULLUP);  //BUTTON
@@ -228,14 +256,25 @@ void setup() {
 #ifdef LightSensor
   pinMode(lightsens, INPUT);      //PHOTO SENSOR
 #endif
-#ifdef DHTsensor
-  pinMode(DHTPIN, INPUT);         //DHT SENSOR
-  dht.begin();
-#endif
+
 #ifdef AudioSensor
   pinMode(mic, INPUT);            //AUDIO SENSOR
 #endif
 
+
+
+
+
+#ifdef OLED
+  u8g2.begin();
+  delay(50);
+#endif
+
+#ifdef DHTsensor
+  pinMode(DHTPIN, INPUT);         //DHT SENSOR
+  dht.begin();
+  delay(50);
+#endif
 
 #ifdef WIFI
   //mySerial.begin(115200);
@@ -245,9 +284,6 @@ void setup() {
   icsc.registerCommand('U', &wifiupdate);
 #endif
 
-#ifdef OLED
-  u8g2.begin();
-#endif
 
   //RTC.begin(); //only for non AVR Boards
   RTC_DS3231 rtc;
@@ -277,24 +313,66 @@ void setup() {
   // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
 
 
+  rtc.disable32K();
+  // Disable and clear both alarms
+  rtc.disableAlarm(1);
+  rtc.disableAlarm(2);
+  rtc.clearAlarm(1);
+  rtc.clearAlarm(2);
+
+
   //Get data from EEPROM
   colorset = EEPROM.read(colorADDR);
   if (colorset > 9) {
     colorset = 0;
   }
+  old_colorset = colorset;
+  
+  alarmhours = EEPROM.read(alarmHourADDR);
+  if (alarmhours > 23) {
+    alarmhours = 0;
+  }
+  alarmminutes = EEPROM.read(alarmMinuteADDR);
+  if (alarmminutes > 59) {
+    alarmminutes = 0;
+  }
+  alarmset = EEPROM.read(alarmStateADDR);
+  if (alarmset > 1) {
+    alarmset = 0;
+  }
+
+  Serial.print("Saved Alarm:");
+  Serial.print(alarmhours);
+  Serial.print(":");
+  Serial.println(alarmminutes);
+
+  if (alarmset == 1) {
+    Serial.println("ALARM IS SET TO ON");
+  }
+  else {
+    Serial.println("ALARM IS SET TO OFF");
+  }
+
 #ifdef OLED
   u8g2.begin();
 #endif
-  //tone(buzzer, 500, 50);
+  tone(buzzer, 500, 50);
 
 #ifdef RAD
   radio.init();
   radio.setBandFrequency(FIX_BAND, FIX_STATION); // hr3 nearby Frankfurt in Germany
-  radio.setVolume(volume);
+  radio.setVolume(FIX_VOLUME);
   radio.setMono(false);
+  radio.setMute(false);
 #endif
 
 
+#ifdef IR
+
+#endif
+
+
+  Serial.println("Clock ready");
 
 }
 
@@ -366,10 +444,9 @@ byte buttoncheck()
 //==================================================================================================================
 void loop() {
 
-  
-    
-    
+
   buttoncheck();
+  PopUphandler();
 
 
   if (colorset == 0) {
@@ -412,63 +489,129 @@ void loop() {
 #endif
 
 
+#ifdef AUTOROTATION
+  //AUTO - PAGE ROTATION
+
+  unsigned long currentPageMillis = millis();
+  if (currentPageMillis - previousPageMillis >= rotationtime) {
+    previousPageMillis = currentPageMillis;
+
+#ifndef DHTsensor
+    if (page < 1) {
+      if ((animateflag == 0) && (popup == 0)) { //only slide pages when nothing is happening
+        page = page + 1;
+        stepcounter = 0;
+        rotationtime = 3000;
+      }
+    }
+#endif
+
+#ifdef DHTsensor //add humidity page
+    if (page < 2) {
+      if ((animateflag == 0) && (popup == 0)) { //only slide pages when nothing is happening
+        page = page + 1;
+        stepcounter = 0;
+        rotationtime = 3000;
+      }
+    }
+#endif
+
+    else {
+      page = 0;
+      stepcounter = 0;
+      rotationtime = 20000;
+    }
+    Serial.print("Automatic pageslide:");
+    Serial.println(page);
+
+  }
+#endif
+
+
+  //LEFT BUTTON
   if (pressedbut == 1) {
-    
-    //stepcounter = 0;
+
     if (colorset < 8) {
       colorset = colorset + 1;
+      popcounter = 0;
     }
     else {
       colorset = 0;
+      popcounter = 0;
     }
   }
+
+  //RIGHT BUTTON
   if (pressedbut == 3) {
-    stepcounter = 0;
-    previousPageMillis = 0;
+    stepcounter = 0; //reset slide animation steps
+
 #ifdef DHTsensor //add humidity page
     if (page < 2) {
       page = page + 1;
-      //Serial.println(page);
     }
 #endif
 
 #ifndef DHTsensor
     if (page < 1) {
       page = page + 1;
-
-      //reset temp samples
-      //buffertemp = 0;
-      //tempsamplecount = 0; //reset temp and humidity samples
-
-      Serial.println(page);
     }
 #endif
 
     else {
       page = 0;
-      Serial.println(page);
+    }
+    Serial.print("Manual page slide:");
+    Serial.println(page);
+  }
+
+  //CENTER BUTTON
+  if (pressedbut == 2) {
+
+    if (alarmstate == 0) {
+
+      if (alarmset == 0) {
+        alarmset = 1;
+        EEPROM.write(alarmStateADDR, alarmset);
+        Serial.println("Alarm activated");
+        alarmset = 1;
+      }
+      else if (alarmset == 1) {
+        alarmset = 0;
+        EEPROM.write(alarmStateADDR, alarmset);
+        Serial.println("Alarm deactivated");
+
+
+      }
+    }
+    else if (alarmstate == 1) {
+      alarmstate = 0;
+      Serial.println("Alarm buzzer off");
     }
   }
+
+
+
+
+
+  //CENTER BUTTON LONG
   if (pressedbut == 5) {
     stepcounter = 0;
-    //get current time for the setting menu
+    //get current time and alarm-setting for the setting menu
     DateTime now = rtc.now();
     newhours = now.hour();
     newminutes = now.minute();
+    newalarmhours = alarmhours;
+    newalarmminutes = alarmminutes;
     menu = 1;
     settime();
   }
 
- 
-  
-  
 
-  
-  
-  
-  
-  
-  
+
+
+
+
+
   if (page == 0) {
     // check if animation is triggered
 
@@ -493,31 +636,42 @@ void loop() {
     OLEDdraw();
   }
 #endif
-  PopUphandler();
-  getTempHum();
-
-  //delay(100);
 
 
 
-#ifdef AUTOROTATION
-//AUTO - PAGE ROTATION
-  unsigned long currentPageMillis = millis();
-    if (currentPageMillis - previousPageMillis >= 20000) {
-      previousPageMillis = currentPageMillis;
-      
-      if (page < 2) {
-      page = page +1;
-      stepcounter = 0;
-      }
-      else {       
-        page = 0;
-        stepcounter = 0;
-        }
+
+
+
+
+  if (rtc.alarmFired(1) == true) {
+
+    if (alarmset = 1) {
+      alarmstate = 1;
+      Serial.println("ALARM TRIGGERED BY RTC!");
+      rtc.clearAlarm(1);
+      //Serial.println("Alarm cleared");
     }
-#endif
+    else {
+      alarmstate = 0;
+    }
+
+  }
 
 
+
+  if (alarmset == 1) {
+    digitalWrite(stateLED, HIGH);
+  }
+  else {
+    digitalWrite(stateLED, LOW);
+  }
+
+
+
+  getTempHum();
+  setbrightness();
+  decodeIR();
+  //pixels.show();
 }
 
 
@@ -535,12 +689,13 @@ void color_rainbow() { // modified from Adafruit example to make it a state mach
   }
 
   mapPixels();
-  setbrightness();
-  delay(50); //testing
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 
   j++;
-
   if (j >= 256) j = 0;
 }
 
@@ -550,8 +705,10 @@ void color_rainbowcycle() {
     pixels.setPixelColor(i, Wheel(((i * 256 / pixels.numPixels()) + j) & 255));
   }
   mapPixels();
-  setbrightness();
-  delay(50); //testing
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 
   j++;
@@ -573,8 +730,10 @@ void color_cyber() {
     pixels.fill(mint, 28, 30);
   }
   mapPixels();
-  setbrightness();
-
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 
 }
@@ -583,7 +742,10 @@ void color_red() {
     pixels.setPixelColor(i, 255, 0, 0); //red
   }
   mapPixels();
-  setbrightness();
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 }
 void color_green() {
@@ -591,7 +753,10 @@ void color_green() {
     pixels.setPixelColor(i, 0, 255, 0); //green
   }
   mapPixels();
-  setbrightness();
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 }
 void color_blue() {
@@ -599,7 +764,10 @@ void color_blue() {
     pixels.setPixelColor(i, 0, 0, 255); //blue
   }
   mapPixels();
-  setbrightness();
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 }
 void color_white() {
@@ -607,7 +775,10 @@ void color_white() {
     pixels.setPixelColor(i, 255, 255, 255); //white
   }
   mapPixels();
-  setbrightness();
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 }
 void color_pink() {
@@ -615,7 +786,10 @@ void color_pink() {
     pixels.setPixelColor(i, 255, 0, 255); //pink
   }
   mapPixels();
-  setbrightness();
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 }
 void color_velvet() {
@@ -623,7 +797,10 @@ void color_velvet() {
     pixels.setPixelColor(i, 255, 255, 0); //velvet
   }
   mapPixels();
-  setbrightness();
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 }
 void color_cyan() {
@@ -631,7 +808,10 @@ void color_cyan() {
     pixels.setPixelColor(i, 0, 255, 255); //cyan
   }
   mapPixels();
-  setbrightness();
+  //setbrightness();
+#ifndef OLED
+  delay(40); //testing
+#endif
   pixels.show();
 }
 
@@ -704,13 +884,6 @@ void mapPixels() {
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
   }
-
-  else if (number_min2 == 12) { //"C" code
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-  }
-
   else if (number_min2 == 13) { //"o up" code
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
@@ -774,15 +947,30 @@ void mapPixels() {
   else if (number_min1 == 9) {
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
   }
+  else if (number_min1 == 10) { //all off code
+    pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(3 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
+  }
+  else if (number_min1 == 11) { //"c" code
+    pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
+  }
   else if (number_min1 == 13) { //"o up" code
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
   }
-  else if (number_min1 == 14) { //"o up" code
-    pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
+  else if (number_min1 == 14) { //"o down" code
+    pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
   }
   else if (number_min1 == 15) { //"dash" code
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
@@ -834,6 +1022,31 @@ void mapPixels() {
   }
   else if (number_hour2 == 9) {
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
+  }
+  else if (number_hour2 == 10) { //all off code
+    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
+  }
+  else if (number_hour2 == 11) { //"c" code
+    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
+  }
+  else if (number_hour2 == 13) { //"o up" code
+    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
+  }
+  else if (number_hour2 == 14) { //"o down" code
+    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
   }
   else if (number_hour2 == 15) { //"dash" code
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
@@ -895,11 +1108,18 @@ void mapPixels() {
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
   }
-
-  else if (number_hour1 == 11) { //minus code
+  else if (number_hour1 == 11) { //"c" code
+    pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
+  }
+  else if (number_hour1 == 13) { //"o up" code
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
+  }
+  else if (number_hour1 == 14) { //"o down" code
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
@@ -949,28 +1169,63 @@ void mapPixels() {
 //==================================================================================================================
 void setbrightness() {
 
+
 #ifdef LightSensor
-  lightvalue = analogRead(lightsens); //Photo-Resistor
 
-  // Serial.print("Photosensor: ");
-  // Serial.println(lightvalue);
+  if (alarmstate == 0) {
+    lightvalue = analogRead(lightsens); //Photo-Resistor
 
-  if (lightvalue < 40) { //value for dark
-    lightvalue = 40;
-  }
-  else if (lightvalue > 1000) { //value for bright
-    lightvalue = 1000;
-  }
+    // Serial.print("Photosensor: ");
+    // Serial.println(lightvalue);
 
-  lightvalue = map(lightvalue, 40, 1000, 50, 255);
-  pixels.setBrightness(lightvalue); //regulates the brightness of the whole strip
+    if (lightvalue < 40) { //value for dark
+      lightvalue = 40;
+    }
+    else if (lightvalue > 1000) { //value for bright
+      lightvalue = 1000;
+    }
+
+    lightvalue = map(lightvalue, 40, 1000, 50, 255);
+    pixels.setBrightness(lightvalue); //regulates the brightness of the whole strip
 #ifdef OLED
-  u8g2.setContrast(lightvalue); //set brightness of the OLED
+    u8g2.setContrast(lightvalue); //set brightness of the OLED
 #endif
 #endif
 #ifndef LightSensor
-  pixels.setBrightness(255); //max brightness if "LightSensor" not defined
+    pixels.setBrightness(255); //max brightness if "LightSensor" not defined
 #endif
+  }
+  else if (alarmstate == 1) {
+    //do wakeup LED and buzzer routine
+
+    if (d == 0) {
+      
+      if (b < 255) {
+        b = b + 15;
+        if (b == 120) {
+          tone(buzzer, 2900, 100);
+          }
+      }
+      else if (b >= 255) {
+        d = 1;
+        b = 255;
+        tone(buzzer, 2900, 100);
+        }
+    }
+
+    else {
+      if (b > 0) {
+        b = b - 15;
+      }
+      else if (b <= 0) {
+        d = 0;
+        b = 0;
+      }
+    }
+
+
+    pixels.setBrightness(b);
+ }
 }
 
 
@@ -985,6 +1240,9 @@ void updateNumber() {
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
 
+    if (alarmstate == 1) {
+      
+      }
     //tmElements_t tm;
     //RTC.read(tm);
     //Serial.print("RTC READ:");
@@ -1019,26 +1277,18 @@ void updateNumber() {
     }
 
 
-    //Serial.print("SYSTEM TIME: ");
-    //Serial.print(hour());
-    //Serial.print(":");
-    //Serial.print(minute());
-    //Serial.print(":");
-    //Serial.println(second());
-
 
     if (animationsetting == 1) {
       //animation every minute
       if (number_min2 != digitbuffer) {
         animateflag = 1;
-        //number_min1 = 0;
         number_min2 = 0;
-        //number_hour1 = 0;
-        //number_hour2 = 0;
+        Serial.println("Digit animation start");
+
+
       }
       else {
         animateflag = 0;
-        //previousAniMillis = 0;
       }
     }
 
@@ -1047,9 +1297,8 @@ void updateNumber() {
       if (number_min1 != digitbuffer) {
         animateflag = 1;
         number_min1 = 0;
-        //number_min2 = 0;
-        //number_hour1 = 0;
-        //number_hour2 = 0;
+        Serial.println("Digit-animation start");
+
       }
       else {
         animateflag = 0;
@@ -1066,8 +1315,8 @@ void updateNumber() {
       dot = 0;
     }
 
-  }
 
+  }
 }
 
 
@@ -1076,7 +1325,7 @@ void getTempHum() {
 
   unsigned long currentUpdateMillis = millis();
 
-  if (currentUpdateMillis - previousUpdateMillis >= 1000) { //was1000
+  if (currentUpdateMillis - previousUpdateMillis >= 2000) {
     previousUpdateMillis = currentUpdateMillis;
 
     if (tempsamplecount < 5) {
@@ -1084,7 +1333,7 @@ void getTempHum() {
 #ifndef DHTsensor
       int16_t rtcTemp = rtc.getTemperature();
       float c = rtcTemp;
-      //float c = rtcTemp / 4.; //convert to celsius
+      //float c = rtcTemp / 4.; //convert to cnumpixelsius
 
 #ifdef Temp_F
       c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
@@ -1131,7 +1380,7 @@ void getTempHum() {
 
     else if (tempsamplecount == 5) {
       buffertemp = buffertemp / 5;
-      Serial.print("AVG Temp:");
+      Serial.print("AVG Temperature:");
       Serial.println(buffertemp);
       newtemp = buffertemp;
       digittemp = newtemp * 10;
@@ -1141,7 +1390,7 @@ void getTempHum() {
 
 #ifdef DHTsensor
       bufferhum = bufferhum / 5;
-      Serial.print("AVG Hum:");
+      Serial.print("AVG Humidity:");
       Serial.println(bufferhum);
       newhum = bufferhum;
       digithum = newhum * 10;
@@ -1191,12 +1440,13 @@ void showtemp() {
       previousAniMillis = currentAniMillis;
 
       if (stepcounter < 4) {
-      stepcounter++;
+        stepcounter++;
+
       }
       else {
         stepcounter = 4;
-        }
-        
+      }
+
 
       //Serial.print("stepcounter:");
       //Serial.println(stepcounter);
@@ -1264,40 +1514,41 @@ void showhumidity() {
   if (newhum == 0) {
     number_hour1 = 15; //dash
     number_hour2 = 15; //dash
-    number_min1 = 14; //code for "°"  %
-    number_min2 = 14; //code for "°"  %
-   // Serial.println("No avg. data yet, waiting…");
+    number_min1 = 13; //code for "0up"  %
+    number_min2 = 14; //code for "0down"  %
+    // Serial.println("No avg. data yet, waiting…");
   }
-  
+
   else {
-    
+
     unsigned long currentAniMillis = millis();
-  
+
     if (currentAniMillis - previousAniMillis >= 100) {
       previousAniMillis = currentAniMillis;
 
       if (stepcounter < 4) {
-      stepcounter++;
+        stepcounter++;
+
       }
       else {
         stepcounter = 4;
-        }
-        
+      }
+
     }
     if (stepcounter == 1) {
       //Slide Animation
       //1st step
 
-     
-      
+
+
       number_hour1 = (digittemp / 10U) % 10; //second digit of temp
-      number_hour2 = 13; //code for c    
+      number_hour2 = 13; //code for c
       number_min1 = 11; //code for "°"
       number_min2 = (digithum / 100U) % 10; //first digit of temp
     }
     else if (stepcounter == 2) {
       //2nd step
-     number_hour1 = 13; //code for c          
+      number_hour1 = 13; //code for c
       number_hour2 = 11; //code for "°"
       number_min1 = (digithum / 100U) % 10; //first digit of temp
       number_min2 = (digithum / 10U) % 10; //second digit of temp
@@ -1308,18 +1559,18 @@ void showhumidity() {
       number_hour1 = 11; //code for "°"
       number_hour2 = (digithum / 100U) % 10; //first digit of temp
       number_min1 = (digithum / 10U) % 10; //second digit of temp
-      number_min2 = 14; //code for "°"  %
+      number_min2 = 13; //code for "°"  %
     }
     else {
       //4th step
       number_hour1 = (digithum / 100U) % 10; //first digit of temp
       number_hour2 = (digithum / 10U) % 10; //second digit of temp
-      number_min1 = 14; //code for "°"  %
+      number_min1 = 13; //code for "°"  %
       number_min2 = 14; //code for "°"  %
     }
-    
 
-}
+
+  }
 
 
 }
@@ -1338,32 +1589,61 @@ void settime() {
 
     uint32_t off = pixels.Color(0, 0, 0);
     uint32_t white = pixels.Color(255, 255, 255);
+    uint32_t red = pixels.Color(255, 0, 0);
 
-    pixels.fill(white, 0, 29);
 
-    //display digits
-    number_hour2 = (newhours % 10); //last digit of the seconds
-    if (newhours < 10) {
-      number_hour1 = 0;
-    }
-    else {
-      number_hour1 = (newhours / 10U) % 10; //first digit of the seconds
+    if ((menustep == 0) || (menustep == 1)) {
+      //display time digits
+      pixels.fill(white, 0, 29);
+
+      number_hour2 = (newhours % 10); //last digit of the seconds
+      if (newhours < 10) {
+        number_hour1 = 0;
+      }
+      else {
+        number_hour1 = (newhours / 10U) % 10; //first digit of the seconds
+      }
+
+      number_min2 = (newminutes % 10); //last digit of the seconds
+      if (newminutes < 10) {
+        number_min1 = 0;
+      }
+      else {
+        number_min1 = (newminutes / 10U) % 10; //first digit of the seconds
+      }
     }
 
-    number_min2 = (newminutes % 10); //last digit of the seconds
-    if (newminutes < 10) {
-      number_min1 = 0;
+    else if ((menustep == 2) || (menustep == 3)) {
+      //display alarm digits
+      pixels.fill(red, 0, 29);
+
+
+      number_hour2 = (newalarmhours % 10); //last digit of the seconds
+      if (newalarmhours < 10) {
+        number_hour1 = 0;
+      }
+      else {
+        number_hour1 = (newalarmhours / 10U) % 10; //first digit of the seconds
+      }
+
+      number_min2 = (newalarmminutes % 10); //last digit of the seconds
+      if (newalarmminutes < 10) {
+        number_min1 = 0;
+      }
+      else {
+        number_min1 = (newalarmminutes / 10U) % 10; //first digit of the seconds
+      }
     }
-    else {
-      number_min1 = (newminutes / 10U) % 10; //first digit of the seconds
-    }
+
+
+
+
 
     //time set routine:
 
     if (menustep == 0) {
-      // Serial.print("New Hours: ");
-      // Serial.println(newhours);
-      pixels.fill(off, 0, 14); // minutes
+
+      pixels.fill(off, 0, 14); // hours
       pixels.fill(off, 28, 29); //dots
 
       //edit hours
@@ -1388,13 +1668,11 @@ void settime() {
       }
     }
     else if (menustep == 1) {
-      // Serial.print("New Minutes: ");
-      // Serial.println(newminutes);
-      pixels.fill(off, 14, 30); // houts and dots
+      pixels.fill(off, 14, 30); // minutes and dots
 
       //edit minutes
       if (pressedbut == 2) {
-        menustep = 0;
+        menustep = 2;
       }
       if (pressedbut == 1) {
         if (newminutes < 59) {
@@ -1413,7 +1691,55 @@ void settime() {
         }
       }
     }
+    else if (menustep == 2) {
+      pixels.fill(off, 0, 14); // hours
+      pixels.fill(off, 28, 29); //dots
 
+      //edit alarm hours
+      if (pressedbut == 2) {
+        menustep = 3;
+      }
+      if (pressedbut == 1) {
+        if (newalarmhours < 23) {
+          newalarmhours += 1;
+        }
+        else {
+          newalarmhours = 0;
+        }
+      }
+      if (pressedbut == 3) {
+        if (newalarmhours > 0) {
+          newalarmhours -= 1;
+        }
+        else {
+          newalarmhours = 23;
+        }
+      }
+    }
+    else if (menustep == 3) {
+      pixels.fill(off, 14, 30); // minutes and dots
+
+      //edit minutes
+      if (pressedbut == 2) {
+        menustep = 0;
+      }
+      if (pressedbut == 1) {
+        if (newalarmminutes < 59) {
+          newalarmminutes += 1;
+        }
+        else {
+          newalarmminutes = 0;
+        }
+      }
+      if (pressedbut == 3) {
+        if (newalarmminutes > 0) {
+          newalarmminutes -= 1;
+        }
+        else {
+          newalarmminutes = 59;
+        }
+      }
+    }
     mapPixels();
     setbrightness();
     pixels.show();
@@ -1421,15 +1747,36 @@ void settime() {
 
     if (pressedbut == 5) {
 
+      //setTime(newhours, newminutes, 0, 30, 12, 2020); //rtc.setTime(byte hours, byte minutes, byte seconds)
+      //RTC.set(now());
+      Serial.println("New time and alarm settings saved:");
+      Serial.print("TIME SAVED:");
+      Serial.print(newhours);
+      Serial.print(":");
+      Serial.println(newminutes);
+      Serial.print("ALARM SAVED:");
+      Serial.print(newalarmhours);
+      Serial.print(":");
+      Serial.println(newalarmminutes);
+
+
+
       //FIXME set date
       rtc.adjust(DateTime(2020, 12, 30, newhours, newminutes, 0));
       DateTime now = rtc.now();
 
-      //setTime(newhours, newminutes, 0, 30, 12, 2020); //rtc.setTime(byte hours, byte minutes, byte seconds)
-      //RTC.set(now());
-      Serial.println("new time saved");
+      rtc.writeSqwPinMode(DS3231_OFF);
+      rtc.disableAlarm(2);
+      rtc.setAlarm1(DateTime(2020, 12, 30, newalarmhours, newalarmminutes, 0), DS3231_A1_Hour);
+
+      EEPROM.write(alarmHourADDR, newalarmhours);
+      EEPROM.write(alarmMinuteADDR, newalarmminutes);
+
+      alarmhours = newalarmhours;
+      alarmminutes = newalarmminutes;
+
       menu = 0;
-      return;
+      //return;
     }
   }
   //exit;
@@ -1485,8 +1832,8 @@ void animate() {
           digitbuffer = number_min1;
         }
 
-        // Serial.println(digitbuffer);
-        // Serial.println(number_min2);
+        Serial.println("Digit animation end");
+        //Serial.println(number_min2);
         animateflag = 0;
       }
     }
@@ -1538,20 +1885,37 @@ uint32_t Wheel(byte WheelPos) {
 
 void PopUphandler() {
 
-  if (colorset != old_colorset) {
-    popup = 1;
-    Serial.print("color-pop triggered:");
-    old_colorset = colorset;
-    tone(buzzer, 100, 50);
-#ifdef OLED
-    colorpopup();
-#endif
-
-    //Serial.println(old_colorset);
-
+  if (popup == 1) {
+    popcounter++;
+    #ifdef OLED
+    delay(15);
+    #endif
+  if (popcounter >= 100) {
+      //popup timeout
+      Serial.println("Popup timeout");
+      EEPROM.write(colorADDR, colorset);
+      Serial.println("Color setting saved");
+      popup = 0;
+      popcounter = 0;
+    }
+    else {
+      popup = 1;
+    }
   }
 
-  if (brightness != old_brightness) {
+
+  if (colorset != old_colorset) {
+    tone(buzzer, 100, 50);
+    popcounter = 0;
+    popup = 1;
+    Serial.print("Color change detected:");
+    Serial.println(colorset);
+    colorpopup();
+    old_colorset = colorset;
+  }
+
+
+  else if (brightness != old_brightness) {
     Serial.println("brightness-pop triggered");
     //popup = 1;
 #ifdef OLED
@@ -1561,7 +1925,7 @@ void PopUphandler() {
     tone(buzzer, 100, 50);
   }
 
-  if (volume != old_volume) {
+  else if (volume != old_volume) {
     Serial.println("volume-pop triggered");
     popup = 1;
 #ifdef OLED
@@ -1572,32 +1936,23 @@ void PopUphandler() {
   }
 
 
-  if (popup == 1) {
 
-    unsigned long currentPopupMillis = millis();
+#ifndef OLED
+  //popup = 0;
+#endif
 
-    if (currentPopupMillis - previousPopupMillis >= 2000) {
-      previousPopupMillis = currentPopupMillis;
-
-      //popup timeout
-      //Serial.print("popup timeout");
-      popup = 0;
-    }
-
-  }
-
-
-
-
-
-
-
+  exit;
 
 }
 
 
-#ifdef OLED
+
+
+
+
+
 void colorpopup() {
+  #ifdef OLED
   u8g2.firstPage();
   do {
 
@@ -1609,9 +1964,11 @@ void colorpopup() {
     }
 
   } while ( u8g2.nextPage() );
+  #endif
 }
 
 void brightnesspopup() {
+    #ifdef OLED
   u8g2.firstPage();
   do {
 
@@ -1623,10 +1980,12 @@ void brightnesspopup() {
     }
 
   } while ( u8g2.nextPage() );
+  #endif
 }
 
 
 void volumepopup() {
+   #ifdef OLED
   u8g2.firstPage();
   do {
 
@@ -1638,8 +1997,9 @@ void volumepopup() {
     }
 
   } while ( u8g2.nextPage() );
+  #endif
 }
-#endif
+
 
 #ifdef OLED
 void OLEDdraw() {
@@ -1788,14 +2148,14 @@ void OLEDdraw() {
         u8g2.print("WIFI FOUND");
       }
 
- #endif
+#endif
 
     }
 
 
 
   } while ( u8g2.nextPage() );
- 
+
 }
 
 #endif
@@ -1844,10 +2204,10 @@ void wifiupdate(unsigned char src, char command, unsigned char len, char *data) 
       Serial.println(wifiSecond); //Seconds
 
       newhour = wifiHour;
-      tone(buzzer, 500, 500);
+      //tone(buzzer, 500, 500);
     }
 
-    return;
+    //return;
   }
 }
 
@@ -1901,3 +2261,10 @@ void checktimeout() {
 
 
 #endif
+
+
+void decodeIR() {
+#ifdef IR
+
+#endif
+}
