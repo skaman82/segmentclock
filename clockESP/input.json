@@ -1,0 +1,103 @@
+{
+"temp": 25.50,
+"tcf": 1,
+"hum": 88.50,
+"col": 1,
+"dig": 1,
+"psl": 1,
+"aum": 1,
+"alarm": 1,
+"a_hh": 11,
+"a_mm": 11,
+"a_type": 1,
+"a_sc": 1,
+"vol": 255,
+"radio": 1,
+"act_mhz": 10360,
+"f1_mhz": 10360,
+"f1_mhz": "Radio Niedersachsen",
+"f2_mhz": 10360,
+"f2_mhz": "Radio Niedersachsen",
+"f3_mhz": 10360,
+"f3_mhz": "Radio Niedersachsen",
+"wd1": -25,
+"wd2": -25,
+"wd3": -25,
+"wd1": 1
+}
+
+
+-------------------------------------------------------------------
+const size_t capacity = JSON_OBJECT_SIZE(28) + 330;
+DynamicJsonBuffer jsonBuffer(capacity);
+
+const char* json = "{\"utc\":-1,\"temp\":25.5,\"tcf\":1,\"hum\":88.5,\"col\":1,\"dig\":1,\"psl\":1,\"aum\":1,\"alarm\":1,\"a_hh\":11,\"a_mm\":11,\"a_type\":1,\"a_sc\":1,\"vol\":255,\"br\":11,\"radio\":1,\"act_mhz\":10360,\"f1_mhz\":10360,\"f1_name\":\"Radio Niedersachsen\",\"f2_mhz\":10360,\"f2_name\":\"Radio Niedersachsen\",\"f3_mhz\":10360,\"f3_name\":\"Radio Niedersachsen\",\"com\":1,\"wd1\":-25,\"wd2\":-25,\"wd3\":-25,\"wd4\":1}";
+
+JsonObject& root = jsonBuffer.parseObject(json);
+
+int utc = root["utc"]; // -1
+float temp = root["temp"]; // 25.5
+int tcf = root["tcf"]; // 1
+float hum = root["hum"]; // 88.5
+int col = root["col"]; // 1
+int dig = root["dig"]; // 1
+int psl = root["psl"]; // 1
+int aum = root["aum"]; // 1
+int alarm = root["alarm"]; // 1
+int a_hh = root["a_hh"]; // 11
+int a_mm = root["a_mm"]; // 11
+int a_type = root["a_type"]; // 1
+int a_sc = root["a_sc"]; // 1
+int vol = root["vol"]; // 255
+int br = root["br"]; // 11
+int radio = root["radio"]; // 1
+int act_mhz = root["act_mhz"]; // 10360
+int f1_mhz = root["f1_mhz"]; // 10360
+const char* f1_name = root["f1_name"]; // "Radio Niedersachsen"
+int f2_mhz = root["f2_mhz"]; // 10360
+const char* f2_name = root["f2_name"]; // "Radio Niedersachsen"
+int f3_mhz = root["f3_mhz"]; // 10360
+const char* f3_name = root["f3_name"]; // "Radio Niedersachsen"
+int com = root["com"]; // 1
+int wd1 = root["wd1"]; // -25
+int wd2 = root["wd2"]; // -25
+int wd3 = root["wd3"]; // -25
+int wd4 = root["wd4"]; // 1
+
+-----------------------------
+SERIALIZE
+
+const size_t capacity = JSON_OBJECT_SIZE(28);
+DynamicJsonBuffer jsonBuffer(capacity);
+
+JsonObject& root = jsonBuffer.createObject();
+root["utc"] = -1;
+root["temp"] = 25.5;
+root["tcf"] = 1;
+root["hum"] = 88.5;
+root["col"] = 1;
+root["dig"] = 1;
+root["psl"] = 1;
+root["aum"] = 1;
+root["alarm"] = 1;
+root["a_hh"] = 11;
+root["a_mm"] = 11;
+root["a_type"] = 1;
+root["a_sc"] = 1;
+root["vol"] = 255;
+root["br"] = 11;
+root["radio"] = 1;
+root["act_mhz"] = 10360;
+root["f1_mhz"] = 10360;
+root["f1_name"] = "Radio Niedersachsen";
+root["f2_mhz"] = 10360;
+root["f2_name"] = "Radio Niedersachsen";
+root["f3_mhz"] = 10360;
+root["f3_name"] = "Radio Niedersachsen";
+root["com"] = 1;
+root["wd1"] = -25;
+root["wd2"] = -25;
+root["wd3"] = -25;
+root["wd4"] = 1;
+
+root.printTo(Serial);

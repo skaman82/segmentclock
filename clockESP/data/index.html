@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<script src="\jquery.min.js"></script>
+	<link rel="stylesheet" href="\style.css">
+</head>
+<body>
+
+
+<script>
+function toggleCheckbox(element) {
+  var xhr = new XMLHttpRequest();
+  
+
+  
+  if(element.checked){ xhr.open("GET", "/update?aset=1", true); 
+  }
+  else { xhr.open("GET", "/update?aset=0", true); 
+  }
+  xhr.send();
+}
+
+
+ setInterval(function() {
+  // Gets values at every five seconds
+  //GetTemp(); 
+  ReadJSON();
+  }, 1000);
+ 
+ 
+
+function ReadJSON() {
+    var xhttp = new XMLHttpRequest();
+    
+    var converted_temp=0; //temp
+    var converted_hum=0; //temp
+    
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+      var myObj = JSON.parse(this.responseText);      
+    
+    converted_temp = parseFloat(myObj.temp).toFixed(1);
+    converted_hum = parseFloat(myObj.hum).toFixed(1);
+
+    document.getElementById("j1").innerHTML = converted_temp;  //temperature
+	document.getElementById("hum_placeholder").innerHTML = converted_hum;   
+
+    
+    if (myObj.tcf == 0) { //check if temperature is set to celsius
+    	document.getElementById("deg").innerHTML = "&#176;C";
+    }
+    else {
+        document.getElementById("deg").innerHTML = "&#176;F";
+	}
+	
+
+    
+    
+    //alarm setting update
+    var alarm_state = myObj.alarm;
+
+    if (alarm_state == 0) {
+    document.getElementById("j0").innerHTML = "OFF";
+    //also update the button
+    document.getElementById("alarmbutton").checked = false;
+    //console.log("OFF state detected, changing button");
+    }
+    else {
+    document.getElementById("j0").innerHTML = "ON";
+    //also update the button
+    document.getElementById("alarmbutton").checked = true; 
+    //console.log("ON state detected, changing button");
+  }
+      
+
+
+	//some other updates
+	document.getElementById("j2").innerHTML = myObj.col;  //should be 1 or 0 > animationsetting
+	document.getElementById("wd4").innerHTML = myObj.wd4;  //should be 1 or 0 > animationsetting
+	
+
+
+
+
+
+  }
+    };
+    xhttp.open("GET", "/json", true);
+    xhttp.send();
+  };
+
+ 
+ function GetHum() {
+    var xhttp = new XMLHttpRequest();
+    var temp=0;
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+    temp = Number(this.responseText);
+    //temp = temp.toFixed(1);
+    document.getElementById("hum_placeholder").innerHTML = temp;   
+      }
+    };
+    xhttp.open("GET", "/getHum", true);
+    xhttp.send();
+  };
+
+
+
+</script>
+
+
+<h2>LED Clock Server</h2>
+
+<div id="mybutton">
+<label class="switch"><input type="checkbox" onchange="toggleCheckbox(this)" id="alarmbutton">
+<span class="slider"></span>
+</label>
+</div>
+
+<div id="mybutton2">
+<label class="switch"><input type="checkbox" onchange="toggleCheckbox(this)" id="dig">
+<span class="slider"></span>
+</label>
+</div>
+
+<div style="display:none;"> %ALARM_BUTTON% </div>
+
+<p>Alarm: <span id="j0"></span></p>
+<p>Temperature: <span id="j1"></span> <span id="deg"></span></p>
+<p>Humidity: <span id="hum_placeholder"></span> %</p>
+<p>Colormode: <span id="j2"></span></p>
+<p>Free memory: <span id="wd4"></span></p>
+
+
+  
+  <form action="/action_page">
+  Float:<br>
+  <input type="text" name="firstname" value="103.60" type="number" step="0.01">
+  <br>
+  Int:<br>
+  <input type="text" name="lastname" value="123" type="number" step="0.01">
+  <br><br>
+  <input type="submit" value="Submit">
+</form> 
+
+
+</body>
+</html>
+
