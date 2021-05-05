@@ -16165,7 +16165,7 @@ Details see: &lt;a href="https://www.we-online.com/catalog/en/TASU_3_5X4_7_SMD_S
 <plain>
 <text x="99.06" y="-10.16" size="1.778" layer="91" rot="R270">NPN_S8050</text>
 <text x="99.06" y="-30.48" size="1.778" layer="91" rot="R270">NPN_S8050</text>
-<text x="195.58" y="0" size="1.778" layer="91">WiFi ON/OFF</text>
+<text x="190.5" y="5.08" size="1.778" layer="91">WiFi ON/OFF</text>
 <text x="195.58" y="-15.24" size="1.778" layer="91">WiFi State LED</text>
 <text x="195.58" y="-35.56" size="1.778" layer="91">Alarm State LED</text>
 <text x="195.58" y="-55.88" size="1.778" layer="91">Power LED</text>
@@ -16372,8 +16372,8 @@ Details see: &lt;a href="https://www.we-online.com/catalog/en/TASU_3_5X4_7_SMD_S
 <instance part="LED2" gate="-4" x="-10.16" y="129.54" smashed="yes">
 <attribute name="NAME" x="-9.144" y="128.778" size="1.524" layer="95"/>
 </instance>
-<instance part="GND9" gate="1" x="185.42" y="-5.08" smashed="yes" rot="R270">
-<attribute name="VALUE" x="182.88" y="-2.54" size="1.778" layer="96" rot="R270"/>
+<instance part="GND9" gate="1" x="185.42" y="2.54" smashed="yes" rot="R270">
+<attribute name="VALUE" x="182.88" y="5.08" size="1.778" layer="96" rot="R270"/>
 </instance>
 <instance part="D2" gate="G$1" x="205.74" y="-22.86" smashed="yes" rot="R270">
 <attribute name="NAME" x="201.168" y="-19.431" size="1.778" layer="95" font="vector"/>
@@ -16673,13 +16673,8 @@ Details see: &lt;a href="https://www.we-online.com/catalog/en/TASU_3_5X4_7_SMD_S
 </segment>
 <segment>
 <pinref part="PH1" gate="G$1" pin="2"/>
-<wire x1="256.54" y1="180.34" x2="256.54" y2="177.8" width="0.1524" layer="91"/>
 <label x="256.54" y="162.56" size="1.778" layer="95" rot="R270" xref="yes"/>
-<wire x1="256.54" y1="177.8" x2="256.54" y2="162.56" width="0.1524" layer="91"/>
-<wire x1="256.54" y1="177.8" x2="248.92" y2="177.8" width="0.1524" layer="91"/>
-<junction x="256.54" y="177.8"/>
-<pinref part="R21" gate="G$1" pin="2"/>
-<wire x1="248.92" y1="172.72" x2="248.92" y2="177.8" width="0.1524" layer="91"/>
+<wire x1="256.54" y1="180.34" x2="256.54" y2="162.56" width="0.1524" layer="91"/>
 </segment>
 <segment>
 <pinref part="J3" gate="J1" pin="VCC"/>
@@ -16821,10 +16816,8 @@ Details see: &lt;a href="https://www.we-online.com/catalog/en/TASU_3_5X4_7_SMD_S
 <label x="-20.32" y="160.02" size="1.778" layer="95" rot="R90" xref="yes"/>
 </segment>
 <segment>
-<wire x1="195.58" y1="-5.08" x2="187.96" y2="-5.08" width="0.1524" layer="91"/>
 <pinref part="GND9" gate="1" pin="GND"/>
-<wire x1="195.58" y1="-5.08" x2="195.58" y2="-2.54" width="0.1524" layer="91"/>
-<wire x1="195.58" y1="-2.54" x2="208.28" y2="2.54" width="0.1524" layer="91"/>
+<wire x1="187.96" y1="2.54" x2="208.28" y2="2.54" width="0.1524" layer="91"/>
 <pinref part="YD-3414" gate="G$1" pin="1"/>
 </segment>
 <segment>
@@ -16897,6 +16890,11 @@ Details see: &lt;a href="https://www.we-online.com/catalog/en/TASU_3_5X4_7_SMD_S
 <wire x1="269.24" y1="165.1" x2="266.7" y2="165.1" width="0.1524" layer="91"/>
 <wire x1="266.7" y1="165.1" x2="266.7" y2="157.48" width="0.1524" layer="91"/>
 <label x="266.7" y="157.48" size="1.778" layer="95" rot="R270" xref="yes"/>
+</segment>
+<segment>
+<pinref part="YD-3414" gate="G$1" pin="3"/>
+<wire x1="218.44" y1="2.54" x2="223.52" y2="2.54" width="0.1524" layer="91"/>
+<label x="223.52" y="2.54" size="1.778" layer="95" xref="yes"/>
 </segment>
 </net>
 <net name="RST" class="0">
@@ -17150,11 +17148,13 @@ Details see: &lt;a href="https://www.we-online.com/catalog/en/TASU_3_5X4_7_SMD_S
 <label x="76.2" y="-12.7" size="1.778" layer="95" xref="yes"/>
 </segment>
 <segment>
-<wire x1="236.22" y1="-5.08" x2="231.14" y2="-5.08" width="0.1524" layer="91"/>
 <label x="236.22" y="-5.08" size="1.778" layer="95" xref="yes"/>
-<wire x1="218.44" y1="2.54" x2="231.14" y2="-2.54" width="0.1524" layer="91"/>
-<wire x1="231.14" y1="-2.54" x2="231.14" y2="-5.08" width="0.1524" layer="91"/>
-<pinref part="YD-3414" gate="G$1" pin="3"/>
+<pinref part="YD-3414" gate="G$1" pin="2"/>
+<wire x1="228.6" y1="-5.08" x2="236.22" y2="-5.08" width="0.1524" layer="91"/>
+<wire x1="208.28" y1="-5.08" x2="205.74" y2="-5.08" width="0.1524" layer="91"/>
+<wire x1="205.74" y1="-5.08" x2="205.74" y2="-10.16" width="0.1524" layer="91"/>
+<wire x1="205.74" y1="-10.16" x2="228.6" y2="-10.16" width="0.1524" layer="91"/>
+<wire x1="228.6" y1="-10.16" x2="228.6" y2="-5.08" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="TX" class="0">
@@ -17180,6 +17180,10 @@ Details see: &lt;a href="https://www.we-online.com/catalog/en/TASU_3_5X4_7_SMD_S
 <pinref part="PH1" gate="G$1" pin="1"/>
 <wire x1="256.54" y1="190.5" x2="256.54" y2="193.04" width="0.1524" layer="91"/>
 <label x="256.54" y="193.04" size="1.778" layer="95" rot="R90" xref="yes"/>
+<pinref part="R21" gate="G$1" pin="2"/>
+<wire x1="248.92" y1="172.72" x2="248.92" y2="190.5" width="0.1524" layer="91"/>
+<wire x1="248.92" y1="190.5" x2="256.54" y2="190.5" width="0.1524" layer="91"/>
+<junction x="256.54" y="190.5"/>
 </segment>
 </net>
 <net name="N$3" class="0">
