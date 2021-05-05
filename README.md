@@ -1,4 +1,4 @@
-# segmentclock
+# segmentclock (WORK IN PROGRESS)
 Arduino 7-Segment RGB LED Clock 
 
 # Functions
