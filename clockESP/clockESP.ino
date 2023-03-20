@@ -1,35 +1,73 @@
+// TO DO
 
-//const char* ssid     = "heyhoffmann";
-//const char* password = "honigkuchenpferd";
+// Brightness Setting popup & menu
+// Digit animation setting menu
+// Pageslide animation setting menu
+// IR Remote Menu access
+// x RTC Bat check (basic warning system)
+// add summertime option
 
-#define DEBUG //Debug data over Serial
+
+
+// OLED Graphics UI
+// OLED Graphics Forecast
+// TBD: Radio UI + FAV management (IR Only)
+
+
+
+// finalise radio PCBs
+// Web stuff (see below)
+
+
+
+//IDE HARDWARE CORE:
+//  ESP8266 V 2.7.4.
+
+//LIBS
+//  Adafruit Neopixel 1.21
+//  U8g2 by Oli Kraus 2-33-15
+//  Radio by Matthias Hertel v 2.0.0
+//  Adafruit Si7021 1.3.0
+//  RTClib by Adafruit 1.12.4
+//  ArduinoJson by Benoit Blanchon 5.13.2
+
+//  Ticker  //https://github.com/esp8266/Arduino/tree/master/libraries/Ticker
+
+
+
+
+//const char* ssid     = "xxx";
+//const char* password = "xxx";
+
+#define DEBUG  //Debug data over Serial
 
 //AP Mode is not visible on display
 //wifi off popup takes longer to hide if wifi was set on prior
 
 //TODOS:
 //======================
-//   x remoove 1000ms update and apply it only to dot animation for faster overall animations
-//   x add WifiClient (ideally non blocking)
+//   add summertime option
 //    port to fastLED to remove flickering
 //    finish digit animation setting (
 //    finish pageslide setting
 //    create a menu: m01 > set time and alarm; m02 > set pageslide on/ff; m02 > set digit animation; m03 > set brightness; m04 > mic on/off
 //    make brightness manually adjustable as a setting (1-10 manual, 0 Auto)
 //    change LED order 1dig, 2dig, dots, 3dig, 4dig.
+//   x add WifiClient (ideally non blocking)
+
 
 
 //    NEW HARDWARE:
 //======================
-//  (ongoing)  OLED support
-//    - IR support (attiny) (testboard req)
-//    - ADC support over I2C (testboard req)
-//     -RTC battery alarm()
-//    RADIO SUPPORT (testboard req)
+//    (ongoing)  OLED support
+//    (ongoing) IR support (attiny) (testboard req)
+//    (ongoing) RADIO SUPPORT (testboard req)
+//    x ADC support over I2C (testboard req)
+//    x RTC battery alarm()
 
 
 //======================
-//    BUILD FINAL PCB!
+//    x BUILD FINAL PCB!
 //======================
 
 //======================
@@ -38,13 +76,14 @@
 
 //    WEB UI:
 //======================
-//   x Enable/disable wifi
-//   x sync weather and time at start once then in 10 min interval
-//   x create json structure for all possible settings > location id and key missing
+
 //    find out how to store apikey, city, location (or better KEY & cityID)
 //    read json full in web-interface on load (reload if something is changed)
 //    Create the UI
-//    moove from SPIFFS to LittleFS
+//   x moove from SPIFFS to LittleFS
+//   x Enable/disable wifi
+//   x sync weather and time at start once then in 10 min interval
+//   x create json structure for all possible settings > location id and key missing
 
 
 
@@ -58,20 +97,30 @@
 
 //Needed digits
 //An: >ClockAnimation
-//Al: >Alarm
+//AL: >Alarm
 //PS: >PageScroll
 
 
-//>> More charakters needed "A" "n" "P" "S" "l"
+//>> More charakters needed "A" "n" "P" "S" "L"
 
-
-//Returned Button codes
+//Returned hardware Button codes (val: buttonpress = X)
 // 1 = Up
 // 2 = Center
 // 3 = Down
 // 4 = Up LONG
 // 5 = Center LONG
 // 6 = Down LONG
+
+
+//Returned IR codes from remote (val: val4 = x) < from ATTINY via I2C
+// X = Up
+// X = Center
+// X = Down
+// x = Left
+// x = Right
+// x = Play/Pause
+// x = Menu
+
 
 //I2C Adresses
 //0x3C - OLED (60)
@@ -90,13 +139,13 @@
 //OPTIONAL USER CONFIG START
 //==================================================================================================================
 
-#define AUTOROTATION    //Sliding Digits (Time > Temp > Humidity >)
-#define LightSensor     //An external photo-resistor can automatically adjust brightness of the clock
+#define AUTOROTATION  //Sliding Digits (Time > Temp > Humidity >)
+#define LightSensor   //An external photo-resistor can automatically adjust brightness of the clock
 #define Si7021sensor  //The Si7021 sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
-#define OLED            //OLED SCEEN < WORK IN PROGRESS
-//#define IR            //TODO: IR Remot control via i2c using an ATtiny845
-//#define RAD           //TODO: RADIO MODULE - Requres OLED & IRCONTROL option
-//#define AudioSensor   //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
+#define OLED          //OLED SCEEN < WORK IN PROGRESS
+#define IR            //TODO: IR Remot control via i2c using an ATtiny845
+#define RAD           //TODO: RADIO MODULE - Requres OLED & IRCONTROL option
+//#define AudioSensor     //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
 //==================================================================================================================
 
 #define RTCtemp
@@ -110,40 +159,52 @@
 #include "Adafruit_Si7021.h"
 Adafruit_Si7021 sensor = Adafruit_Si7021();
 #endif
+
+#ifdef RAD
+#include "pt2257.h"
+#include <radio.h>
+#include <RDA5807M.h>
+
+#define FIX_BAND RADIO_BAND_FM  ///< The band that will be tuned by this sketch is FM.
+#define FIX_STATION 10360       ///< The station that will be tuned by this sketch is 89.30 MHz.
+#define FIX_VOLUME 10           ///< The volume that will be set by this sketch is level 4.
+
+PT2257 pt2257;
+RDA5807M radio;  // Create an instance of Class for RDA5807M Chip
+
+#endif
+
 //==================================================================================================================
 
 //#define Temp_F              //Teperature will be converted from C to F
-float tempoffset       =   0.0;   //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
-float humidityoffset   =   0.0;   //+1 Humidity adjustment (positive or negative value) only with Si7021 sensor
-int UTCoffset = +1;               //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync
-
+float tempoffset = -2.0;     //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
+float humidityoffset = 0.0;  //+1 Humidity adjustment (positive or negative value) only with Si7021 sensor
+int UTCoffset = +1;          //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync
+int summertime = 1;
 //==================================================================================================================
 //USER CONFIG END
 //==================================================================================================================
 
 //D1-SCL | D2-SDA
-#define stateLED        D0   //no PWM, Alarmstate LED
-#define bt_set          D3   //OK pulled up, Button
-#define bt_up           D4   //OK pulled up, Button
-#define LEDPIN          D5   //OK, Neopixel
-#define bt_dwn          D6   //OK, Button
-#define buzzer          D7   //OK, Buzzer
-#define wifiLED         D8   //pulled to GND, Boot fails if pulled HIGH, WiFi state LED
-#define lightsens       A0   //OK, Photo Resistor 
-#define bt_wifi         RX   //HIGH at boot, WiFi ON/OFF button
+#define stateLED D0   //no PWM, Alarmstate LED
+#define bt_set D3     //OK pulled up, Button
+#define bt_dwn D4     //OK pulled up, Button
+#define LEDPIN D5     //OK, Neopixel
+#define bt_up D6      //OK, Button
+#define buzzer D7     //OK, Buzzer
+#define wifiLED D8    //pulled to GND, Boot fails if pulled HIGH, WiFi state LED
+#define lightsens A0  //OK, Photo Resistor
+#define bt_wifi RX    //HIGH at boot, WiFi ON/OFF button
 
-//#define vbat          A0  //RTC Battery Monitoring //can be left
-//#define mic           A2  //AUX1 pad - Microphone //dont have to be analog
+#define colorADDR 0        // EEPROM Adress
+#define animationADDR 1    // EEPROM Adress
+#define alarmStateADDR 2   // EEPROM Adress
+#define alarmHourADDR 3    // EEPROM Adress
+#define alarmMinuteADDR 4  // EEPROM Adress
+#define wifiStateADDR 5    // EEPROM Adress
 
-#define colorADDR       0   // EEPROM Adress
-#define animationADDR   1   // EEPROM Adress
-#define alarmStateADDR  2   // EEPROM Adress
-#define alarmHourADDR   3   // EEPROM Adress
-#define alarmMinuteADDR 4   // EEPROM Adress
-#define wifiStateADDR   5   // EEPROM Adress
-
-#define NUMPIXELS       60
-#define longpresstime   500 // in ms
+#define NUMPIXELS 60
+#define longpresstime 500  // in ms
 
 #include <EEPROM.h>
 #include <Wire.h>
@@ -151,28 +212,26 @@ int UTCoffset = +1;               //UTC Time offset in hours e.g. ("1" or "-1") 
 #include "RTClib.h"
 RTC_DS3231 rtc;
 
-#include <Adafruit_NeoPixel.h> //Adafruit NeoPixel
+#include <Adafruit_NeoPixel.h>  //Adafruit NeoPixel
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LEDPIN, NEO_GRB + NEO_KHZ800);
 
 #ifdef OLED
 #include <U8g2lib.h>
-//U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 //U8G2_SSD1306_96X16_ER_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // EastRising 0.69" OLED
-//U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
-U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
-#endif
-
-#ifdef RAD
-//do stuff
+U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/SCL, /* data=*/SDA, /* reset=*/U8X8_PIN_NONE);  // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
+//U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 #endif
 
 
-byte wireArray[8] = {}; //empty array where to put the numbers comming from the slave
+
+
+byte wireArray[8] = {};  //empty array where to put the numbers comming from the slave
 int micvalue = 0;
 int adcvalue1 = 0;
 int adcvalue2 = 0;
+float RTC_voltage = 0;
 
-int poptime = 1000; //runtime timeout of the popup
+int poptime = 1000;  //runtime timeout of the popup
 
 byte wifion = 0;
 byte old_wifion = 0;
@@ -200,6 +259,8 @@ byte animateflag = 0;
 byte digitbuffer = 0;
 byte dot = 0;
 
+byte looptime = 0;
+
 byte nowhour = 0;
 byte nowminute = 0;
 byte nowsecond = 0;
@@ -207,6 +268,9 @@ char* nowweekday;
 byte nowday = 0;
 byte nowmonth = 0;
 int nowyear = 0;
+int newyear;
+byte newmonth;
+byte newday;
 byte newhours;
 byte newminutes;
 byte alarmhours;
@@ -221,11 +285,15 @@ float newtemp = 0;
 float newhum = 0;
 int16_t digittemp = 0;
 int16_t digithum = 0;
-uint8_t wifiState = 0; //module status
+uint8_t wifiState = 0;  //module status
 byte updateflag = 1;
 byte sensorupdateflag = 1;
 
-char daysOfTheWeek[7][12] = {"SO", "MO", "DI", "MI", "DO", "FR", "SA"};
+byte radiostate = 0;   //determines if radio is on or off
+byte warningcode = 0;  //warning code for warning popup
+byte dismissed = 0;    //if 1 warning was dismissed and is not appearing again (only for the RTC Bat check as it checks bat regullary)
+
+char daysOfTheWeek[7][12] = { "SO", "MO", "DI", "MI", "DO", "FR", "SA" };
 
 byte alarmset = 0;
 byte old_alarmset;
@@ -237,61 +305,61 @@ byte volume = 0;
 byte old_volume = 0;
 byte colorset = 0;
 byte old_colorset = 0;
-int b = 0; //brightness
-byte d = 0; //brightness direction
+int b = 0;   //brightness
+byte d = 0;  //brightness direction
 int popcounter = 0;
 byte oledpage = 0;
-unsigned long previousMillis = 0; // will store last time LED was updated
-unsigned long previousAniMillis = 0;  // Animation Timer
-unsigned long previousUpdateMillis = 0;  // Sensor Update Timer
+unsigned long previousMillis = 0;         // will store last time LED was updated
+unsigned long previousAniMillis = 0;      // Animation Timer
+unsigned long previousUpdateMillis = 0;   // Sensor Update Timer
 unsigned long previousTimeoutMillis = 0;  // Timeout Timer
-unsigned long previousPageMillis = 0;  // Timeout Timer
-unsigned long previousPopupMillis = 0;  // Timeout Timer
-unsigned long lastUpdate = 0 ; // for millis() when last update occoured
+unsigned long previousPageMillis = 0;     // Timeout Timer
+unsigned long previousPopupMillis = 0;    // Timeout Timer
+unsigned long lastUpdate = 0;             // for millis() when last update occoured
 
-unsigned long patternInterval = 50 ; // time between steps in the color pattern
-const long interval = 1000; // interval at which to blink (milliseconds)
-const long animinterval = 50;  // interval for the slot-effect (milliseconds)
+unsigned long patternInterval = 50;  // time between steps in the color pattern
+const long interval = 1000;          // interval at which to blink (milliseconds)
+const long animinterval = 50;        // interval for the slot-effect (milliseconds)
 long rotationtime = 20000;
-long pagecycletime;
 
+long pagecycletime;
 long timeSinceLastOLEDpage = 0;
 
 long timeSinceLastWUpdate = 0;
-const int UPDATE_INTERVAL_SECS = 10 * 60; // Update every 10 minutes
+const int UPDATE_INTERVAL_SECS = 10 * 60;  // Update every 10 minutes
 bool AP_mode = false;
 //-----------
 
 // Load Wi-Fi library
-#include <ESP8266WiFi.h> //https://github.com/esp8266/Arduino
+#include <ESP8266WiFi.h>  //https://github.com/esp8266/Arduino
 #include <ESP8266HTTPClient.h>
 
-#include <NTPClient.h> //https://github.com/arduino-libraries/NTPClient/tree/master/examples
+#include <NTPClient.h>  //https://github.com/arduino-libraries/NTPClient/tree/master/examples
 #include <WiFiUdp.h>
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "europe.pool.ntp.org");
 
 #include "ESPAsyncWebServer.h"
-#include <ESPAsyncWiFiManager.h> //https://github.com/tzapu/WiFiManager || https://github.com/alanswx/ESPAsyncWiFiManager
+#include <ESPAsyncWiFiManager.h>  //https://github.com/tzapu/WiFiManager || https://github.com/alanswx/ESPAsyncWiFiManager
 
-#include "FS.h"   //Include File System Headers
+#include "FS.h"        //Include File System Headers
+#include "LittleFS.h"  // LittleFS is declared
 #include "AsyncJson.h"
-#include "ArduinoJson.h"
+#include "ArduinoJson.h" //https://github.com/bblanchon/ArduinoJson
 
 //for LED status
-#include <Ticker.h> //https://github.com/esp8266/Arduino/blob/master/libraries/Ticker/src/Ticker.h
+#include <Ticker.h>  //https://github.com/esp8266/Arduino/tree/master/libraries/Ticker
 Ticker ticker;
 
 
-void tick()
-{
+void tick() {
   //toggle state
   int state = digitalRead(wifiLED);  // get the current state of GPIO1 pin
   digitalWrite(wifiLED, !state);     // set pin to the opposite state
 }
 
 //gets called when WiFiManager enters configuration mode
-void configModeCallback (AsyncWiFiManager *myWiFiManager) {
+void configModeCallback(AsyncWiFiManager* myWiFiManager) {
 
   Serial.println("Entered AccessPiont mode");
   //Serial.println(WiFi.softAPIP());
@@ -302,7 +370,7 @@ void configModeCallback (AsyncWiFiManager *myWiFiManager) {
   AP_mode = true;
 }
 
-const char* PAR1 = "aset"; //ids of the buttons in web ui
+const char* PAR1 = "aset";  //ids of the buttons in web ui
 
 AsyncWebServer server(80);
 DNSServer dns;
@@ -319,8 +387,7 @@ String processor(const String& var) {
 
     if (alarmset == 1) {
       buttonval = "checked";
-    }
-    else {
+    } else {
       buttonval = "";
     }
 
@@ -340,10 +407,10 @@ String processor(const String& var) {
 
 int I2C_ClearBus() {
 #if defined(TWCR) && defined(TWEN)
-  TWCR &= ~(_BV(TWEN)); //Disable the Atmel 2-Wire interface so we can control the SDA and SCL pins directly
+  TWCR &= ~(_BV(TWEN));  //Disable the Atmel 2-Wire interface so we can control the SDA and SCL pins directly
 #endif
 
-  pinMode(D2, INPUT_PULLUP); // Make SDA (data) and SCL (clock) pins Inputs with pullup.
+  pinMode(D2, INPUT_PULLUP);  // Make SDA (data) and SCL (clock) pins Inputs with pullup.
   pinMode(D1, INPUT_PULLUP);
 
   //delay(2500);  // Wait 2.5 secs. This is strictly only necessary on the first power
@@ -352,53 +419,53 @@ int I2C_ClearBus() {
   // IDE a chance to start uploaded the program
   // before existing sketch confuses the IDE by sending Serial data.
 
-  boolean SCL_LOW = (digitalRead(D1) == LOW); // Check is SCL is Low.
-  if (SCL_LOW) { //If it is held low Arduno cannot become the I2C master.
-    return 1; //I2C bus error. Could not clear SCL clock line held low
+  boolean SCL_LOW = (digitalRead(D1) == LOW);  // Check is SCL is Low.
+  if (SCL_LOW) {                               //If it is held low Arduno cannot become the I2C master.
+    return 1;                                  //I2C bus error. Could not clear SCL clock line held low
   }
 
   boolean SDA_LOW = (digitalRead(D2) == LOW);  // vi. Check SDA input.
-  int clockCount = 20; // > 2x9 clock
+  int clockCount = 20;                         // > 2x9 clock
 
-  while (SDA_LOW && (clockCount > 0)) { //  vii. If SDA is Low,
+  while (SDA_LOW && (clockCount > 0)) {  //  vii. If SDA is Low,
     clockCount--;
     // Note: I2C bus is open collector so do NOT drive SCL or SDA high.
-    pinMode(D1, INPUT); // release SCL pullup so that when made output it will be LOW
-    pinMode(D1, OUTPUT); // then clock SCL Low
-    delayMicroseconds(10); //  for >5uS
-    pinMode(D1, INPUT); // release SCL LOW
-    pinMode(D1, INPUT_PULLUP); // turn on pullup resistors again
+    pinMode(D1, INPUT);         // release SCL pullup so that when made output it will be LOW
+    pinMode(D1, OUTPUT);        // then clock SCL Low
+    delayMicroseconds(10);      //  for >5uS
+    pinMode(D1, INPUT);         // release SCL LOW
+    pinMode(D1, INPUT_PULLUP);  // turn on pullup resistors again
     // do not force high as slave may be holding it low for clock stretching.
-    delayMicroseconds(10); //  for >5uS
+    delayMicroseconds(10);  //  for >5uS
     // The >5uS is so that even the slowest I2C devices are handled.
-    SCL_LOW = (digitalRead(D1) == LOW); // Check if SCL is Low.
+    SCL_LOW = (digitalRead(D1) == LOW);  // Check if SCL is Low.
     int counter = 20;
     while (SCL_LOW && (counter > 0)) {  //  loop waiting for SCL to become High only wait 2sec.
       counter--;
       delay(100);
       SCL_LOW = (digitalRead(D1) == LOW);
     }
-    if (SCL_LOW) { // still low after 2 sec error
-      return 2; // I2C bus error. Could not clear. SCL clock line held low by slave clock stretch for >2sec
+    if (SCL_LOW) {  // still low after 2 sec error
+      return 2;     // I2C bus error. Could not clear. SCL clock line held low by slave clock stretch for >2sec
     }
-    SDA_LOW = (digitalRead(D2) == LOW); //   and check SDA input again and loop
+    SDA_LOW = (digitalRead(D2) == LOW);  //   and check SDA input again and loop
   }
-  if (SDA_LOW) { // still low
-    return 3; // I2C bus error. Could not clear. SDA data line held low
+  if (SDA_LOW) {  // still low
+    return 3;     // I2C bus error. Could not clear. SDA data line held low
   }
 
   // else pull SDA line low for Start or Repeated Start
-  pinMode(D2, INPUT); // remove pullup.
+  pinMode(D2, INPUT);   // remove pullup.
   pinMode(D2, OUTPUT);  // and then make it LOW i.e. send an I2C Start or Repeated start control.
   // When there is only one I2C master a Start or Repeat Start has the same function as a Stop and clears the bus.
   /// A Repeat Start is a Start occurring after a Start with no intervening Stop.
-  delayMicroseconds(10); // wait >5uS
-  pinMode(D2, INPUT); // remove output low
-  pinMode(D2, INPUT_PULLUP); // and make SDA high i.e. send I2C STOP control.
-  delayMicroseconds(10); // x. wait >5uS
-  pinMode(D2, INPUT); // and reset pins as tri-state inputs which is the default state on reset
+  delayMicroseconds(10);      // wait >5uS
+  pinMode(D2, INPUT);         // remove output low
+  pinMode(D2, INPUT_PULLUP);  // and make SDA high i.e. send I2C STOP control.
+  delayMicroseconds(10);      // x. wait >5uS
+  pinMode(D2, INPUT);         // and reset pins as tri-state inputs which is the default state on reset
   pinMode(D1, INPUT);
-  return 0; // all ok
+  return 0;  // all ok
 }
 
 
@@ -411,20 +478,21 @@ void setup() {
   pinMode(LEDPIN, OUTPUT);
   digitalWrite(LEDPIN, LOW);
 
-  pixels.begin(); // This initializes the NeoPixel library.
-  pixels.clear(); //sett all pixels to off
+  pixels.begin();  // This initializes the NeoPixel library.
+  pixels.clear();  //sett all pixels to off
   pixels.show();
 
   //-----------
 
 #ifdef DEBUG
   Serial.begin(115200);
-  while (!Serial); // wait for serial port to connect. Needed for native USB
+  while (!Serial)
+    ;  // wait for serial port to connect. Needed for native USB
 #endif
 
   //-----------
 
-  int rtn = I2C_ClearBus(); // clear the I2C bus first before calling Wire.begin()
+  int rtn = I2C_ClearBus();  // clear the I2C bus first before calling Wire.begin()
   if (rtn != 0) {
     Serial.println(F("I2C bus error. Could not clear"));
     if (rtn == 1) {
@@ -434,7 +502,7 @@ void setup() {
     } else if (rtn == 3) {
       Serial.println(F("SDA data line held low"));
     }
-  } else { // bus clear
+  } else {  // bus clear
     // re-enable Wire
     // now can start Wire Arduino master
     Wire.begin();
@@ -445,12 +513,12 @@ void setup() {
 
   //pinMode(vbat, INPUT);          //RTC Battery voltage
 
-  pinMode(buzzer, OUTPUT);        //SPEAKER
-  pinMode(stateLED, OUTPUT);      //STATUS-LED
-  pinMode(wifiLED, OUTPUT);      //STATUS-LED
-  pinMode(bt_up, INPUT_PULLUP);   //BUTTON
-  pinMode(bt_set, INPUT_PULLUP);  //BUTTON
-  pinMode(bt_dwn, INPUT_PULLUP);  //BUTTON
+  pinMode(buzzer, OUTPUT);         //SPEAKER
+  pinMode(stateLED, OUTPUT);       //STATUS-LED
+  pinMode(wifiLED, OUTPUT);        //STATUS-LED
+  pinMode(bt_dwn, INPUT_PULLUP);   //BUTTON
+  pinMode(bt_set, INPUT_PULLUP);   //BUTTON
+  pinMode(bt_up, INPUT_PULLUP);    //BUTTON
   pinMode(bt_wifi, INPUT_PULLUP);  //WIFI BUTTON TEST
 
   digitalWrite(stateLED, LOW);
@@ -458,20 +526,23 @@ void setup() {
 
 
 #ifdef LightSensor
-  pinMode(lightsens, INPUT);      //PHOTO SENSOR
+  pinMode(lightsens, INPUT);  //PHOTO SENSOR
 #endif
 
 
 #ifdef Si7021sensor
   if (!sensor.begin()) {
-    Serial.println("Did not find Si7021 sensor!");
-    while (true)
-      ;
+    Serial.println("ERROR: Did not find Si7021 sensor!");
+    tone(buzzer, 500, 1000);
+    delay(1000);
+    warningcode = 1;
+    //while (true) //this causes the device to stuck
+    ;
   }
 #endif
 
 #ifdef AudioSensor
-  pinMode(mic, INPUT);            //AUDIO SENSOR
+  //AUDIO SENSOR
 #endif
 
 #ifdef OLED
@@ -480,16 +551,24 @@ void setup() {
   connectstate();
 #endif
 
-  //Get data from EEPROM
+
+
+
+  //Get data from EEPROM >>
+
+
+
+  //EEPROM color setting
   colorset = EEPROM.read(colorADDR);
   if (colorset > 8) {
     colorset = 0;
   }
 
-  //colorset = 0;
   old_colorset = colorset;
 
 
+
+  //EEPROM alarm setting
   alarmhours = EEPROM.read(alarmHourADDR);
 
   if (alarmhours > 23) {
@@ -508,8 +587,6 @@ void setup() {
 
   old_alarmset = alarmset;
 
-  wifion = EEPROM.read(wifiStateADDR);
-
   Serial.println();
   Serial.print("STORED ALARM TIME: ");
 
@@ -526,36 +603,32 @@ void setup() {
 
   if (alarmset == 1) {
     Serial.println("ALARM IS SET TO ON");
-  }
-  else {
+  } else {
     Serial.println("ALARM IS SET TO OFF");
   }
 
 
 
-#ifdef RAD
-  //do stuff
-#endif
-
-  tone(buzzer, 500, 50);
-
+  //EEPROM WiFi setting
+  wifion = EEPROM.read(wifiStateADDR);
+  if (wifion == 1) {
+    Serial.println("WIFI IS SET TO ON");
+  } else {
+    Serial.println("WIFI IS SET TO OFF");
+  }
 
   //-----------------------
-  // Initialize SPIFFS < FIXME
-  if (!SPIFFS.begin()) {
-    Serial.println("An Error has occurred while mounting SPIFFS");
+  // Initialize FS
+  if (!LittleFS.begin()) {
+    Serial.println("ERROR has occurred while mounting FS");
+    warningcode = 2;
+    tone(buzzer, 500, 200);
     return;
   }
 
-
-  //runserver();
-
-  Serial.print("STORED WIFI STATE: ");
-  Serial.println(wifion);
-
   if (wifion == 0) {
     WiFi.forceSleepBegin();
-  } //Disables WiFi if it is not on
+  }  //Disables WiFi if it is not on
 
   else if (wifion == 1) {
     runserver();
@@ -563,18 +636,40 @@ void setup() {
 
 
 
+#ifdef RAD
+  radio.init();
+  //radio.debugEnable();  // Enable information to the Serial port
+  radio.setBandFrequency(FIX_BAND, FIX_STATION);
+  radio.setVolume(FIX_VOLUME);
+  radio.setMono(false);
+  radio.setMute(false);
+
+  pt2257.init();
+
+  pt2257.mute(false);
+  radio.setMute(false);
+
+  old_volume = 20;
+  volume = 20;                //default vol
+  pt2257.set_volume(volume);  // 0-75 possible
+
+
+#endif
+
   rtc.begin();
 
-  if (! rtc.begin()) {
+  if (!rtc.begin()) {
     Serial.println("Couldn't find RTC");
+    warningcode = 5;
     Serial.flush();
     abort();
   }
 
   if (rtc.lostPower()) {
-    Serial.println("RTC lost Power");
+    Serial.println("WARNING: RTC lost Power");
+    warningcode = 3;
     // this will adjust to the date and time at compilation
-    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
 
 
@@ -592,12 +687,16 @@ void setup() {
 
   Serial.println("Clock ready");
 
+  tone(buzzer, 500, 50);
   //delay(300);
 
   DateTime now = rtc.now();
   nowhour = now.hour();
   nowminute = now.minute(), DEC;
   nowsecond = now.second(), DEC;
+  nowday = now.day(), DEC;
+  nowmonth = now.month(), DEC;
+  nowyear = now.year(), DEC;
 
   //-------
 }
@@ -666,58 +765,57 @@ void runserver() {
     //});
 
     // Route for root / web page
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-      request->send(SPIFFS, "/index.html", String(), false, processor);
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
+      request->send(LittleFS, "/index.html", String(), false, processor);
     });
 
     // Route to load style.css file
-    server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest * request) {
-      request->send(SPIFFS, "/style.css", "text/css");
+    server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest* request) {
+      request->send(LittleFS, "/style.css", "text/css");
     });
 
     // Route to load jquery.min.js file
-    server.on("/jquery.min.js", HTTP_GET, [](AsyncWebServerRequest * request) {
-      request->send(SPIFFS, "/jquery.min.js", "text/javascript");
+    server.on("/jquery.min.js", HTTP_GET, [](AsyncWebServerRequest* request) {
+      request->send(LittleFS, "/jquery.min.js", "text/javascript");
     });
 
-    server.on("/json", HTTP_ANY, [](AsyncWebServerRequest * request) {
-
+    server.on("/json", HTTP_ANY, [](AsyncWebServerRequest* request) {
       uint32_t free = system_get_free_heap_size();
 
       const size_t capacity = JSON_OBJECT_SIZE(28);
       DynamicJsonBuffer jsonBuffer(capacity);
 
-      AsyncJsonResponse * response = new AsyncJsonResponse();
+      AsyncJsonResponse* response = new AsyncJsonResponse();
       JsonObject& root = response->getRoot();
 
-      root["utc"] = -1; //UTC Time offset
-      root["temp"] = newtemp; //newtemp; //temperature
-      root["tcf"] = 0; //temperature type TODO
-      root["hum"] = newhum; //humidity
-      root["col"] = colorset; //color setting
-      root["dig"] = animationsetting; //digitanimation TODO
-      root["psl"] = 0; //automatic pageslide TODO
-      root["aum"] = 0; //audiomode TODO
-      root["alarm"] = alarmset; //alarm is on or off
+      root["utc"] = -1;                //UTC Time offset
+      root["temp"] = newtemp;          //newtemp; //temperature
+      root["tcf"] = 0;                 //temperature type TODO
+      root["hum"] = newhum;            //humidity
+      root["col"] = colorset;          //color setting
+      root["dig"] = animationsetting;  //digitanimation TODO
+      root["psl"] = 0;                 //automatic pageslide TODO
+      root["aum"] = 0;                 //audiomode TODO
+      root["alarm"] = alarmset;        //alarm is on or off
       root["a_hh"] = alarmhours;
       root["a_mm"] = alarmminutes;
-      root["a_type"] = 0; //alarm type (once, daily, only weekdays) TODO
-      root["a_sc"] = 0; //alarm scource (buzzer/radio) TODO
-      root["vol"] = 255; //volume TODO
-      root["br"] = 0; //brightness 0-11, 11 = auto TODO
-      root["radio"] = 0; //radio state (0 off, 1 on in vaf mode, 2 on in manual) TODO
-      root["act_mhz"] = 10360; //set frequency TODO
-      root["f1_mhz"] = 10360; //Favorite1 frequency TODO
-      root["f1_name"] = "Radio Niedersachsen"; //Favorite1 name TODO
-      root["f2_mhz"] = 10360; //Favorite2 frequency TODO
-      root["f2_name"] = "Radio Niedersachsen"; //Favorite2 name TODO
-      root["f3_mhz"] = 10360; //Favorite3 frequency TODO
-      root["f3_name"] = "Radio Niedersachsen"; //Favorite3 name TODO
-      root["com"] = irbutton; //button command
-      root["wd1"] = -25; //weather data > actual temp TODO
-      root["wd2"] = -25; //weather data > min day temp TODO
-      root["wd3"] = -25;  //weather data > max day temp TODO
-      root["wd4"] = free;  //weather data > icon TODO
+      root["a_type"] = 0;                       //alarm type (once, daily, only weekdays) TODO
+      root["a_sc"] = 0;                         //alarm scource (buzzer/radio) TODO
+      root["vol"] = 255;                        //volume TODO
+      root["br"] = 0;                           //brightness 0-11, 11 = auto TODO
+      root["radiostate"] = 0;                   //radio state (0 off, 1 on in vaf mode, 2 on in manual) TODO
+      root["act_mhz"] = 10360;                  //set frequency TODO
+      root["f1_mhz"] = 10360;                   //Favorite1 frequency TODO
+      root["f1_name"] = "Radio Niedersachsen";  //Favorite1 name TODO
+      root["f2_mhz"] = 10360;                   //Favorite2 frequency TODO
+      root["f2_name"] = "Radio Niedersachsen";  //Favorite2 name TODO
+      root["f3_mhz"] = 10360;                   //Favorite3 frequency TODO
+      root["f3_name"] = "Radio Niedersachsen";  //Favorite3 name TODO
+      root["com"] = irbutton;                   //button command
+      root["wd1"] = -25;                        //weather data > actual temp TODO
+      root["wd2"] = -25;                        //weather data > min day temp TODO
+      root["wd3"] = -25;                        //weather data > max day temp TODO
+      root["wd4"] = free;                       //weather data > icon TODO
 
       response->setLength();
       request->send(response);
@@ -725,7 +823,7 @@ void runserver() {
 
 
     // Send a GET request to <ESP_IP>/update?state=<inputMessage>
-    server.on("/update", HTTP_GET, [] (AsyncWebServerRequest * request) {
+    server.on("/update", HTTP_GET, [](AsyncWebServerRequest* request) {
       String inputMessage;
       String inputParam;
       // GET input1 value on <ESP_IP>/update?state=<inputMessage>
@@ -734,12 +832,10 @@ void runserver() {
         inputParam = PAR1;
         if (inputMessage == "1") {
           alarmset = 1;
-        }
-        else {
+        } else {
           alarmset = 0;
         }
-      }
-      else {
+      } else {
         inputMessage = "No message sent";
         inputParam = "none";
       }
@@ -750,7 +846,7 @@ void runserver() {
     });
 
     // Send a GET request to <ESP_IP>/state
-    server.on("/aset", HTTP_GET, [] (AsyncWebServerRequest * request) {
+    server.on("/aset", HTTP_GET, [](AsyncWebServerRequest* request) {
       request->send(200, "text/plain", String(alarmset).c_str());
     });
 
@@ -762,10 +858,9 @@ void runserver() {
     // Print ESP8266 Local IP Address
     Serial.println(WiFi.localIP());
 
-    serveronline = true; //quit initialisiation
-    old_wifion = 0; //this will trigger a popup at the beginning
+    serveronline = true;  //quit initialisiation
+    old_wifion = 0;       //this will trigger a popup at the beginning
   }
-
 }
 
 
@@ -777,8 +872,7 @@ void runserver() {
 
 //BUTTON READING
 //==================================================================================================================
-byte buttoncheck()
-{
+byte buttoncheck() {
   int i_butt = 0;
   byte buttonz = 0;
   if (digitalRead(bt_up) != 1) {
@@ -787,11 +881,11 @@ byte buttoncheck()
       i_butt++;
     }
     tone(buzzer, 100, 50);
-    buttonz = 1; //Up pressed
+    buttonz = 1;  //Up pressed
 
     if (i_butt > (longpresstime)) {
       tone(buzzer, 100, 500);
-      buttonz = 4; //Button up pressed long
+      buttonz = 4;  //Button up pressed long
       delay(2);
     }
   }
@@ -801,42 +895,39 @@ byte buttoncheck()
       delay(2);
       i_butt++;
     }
-    buttonz = 2; //Center pressed
+    buttonz = 2;  //Center pressed
     tone(buzzer, 100, 50);
 
     if (i_butt > (longpresstime)) {
-      buttonz = 5; //Button center pressed long
+      buttonz = 5;  //Button center pressed long
       tone(buzzer, 100, 500);
       delay(2);
     }
 
-  }
-  else if (digitalRead(bt_dwn) != 1) {
+  } else if (digitalRead(bt_dwn) != 1) {
     while (digitalRead(bt_dwn) != 1) {
       delay(2);
       i_butt++;
     }
-    buttonz = 3; //Down pressed
+    buttonz = 3;  //Down pressed
     tone(buzzer, 100, 50);
 
     if (i_butt > (longpresstime)) {
-      buttonz = 6; //Button down pressed long
+      buttonz = 6;  //Button down pressed long
       tone(buzzer, 100, 500);
       delay(2);
     }
-  }
-  else if (digitalRead(bt_wifi) != 1) {
+  } else if (digitalRead(bt_wifi) != 1) {
     while (digitalRead(bt_wifi) != 1) {
       delay(2);
       i_butt++;
     }
-    buttonz = 7; //Wifi Button pressed
+    buttonz = 7;  //Wifi Button pressed
     tone(buzzer, 100, 50);
   }
 
   pressedbut = buttonz;
   return buttonz;
-
 }
 
 
@@ -847,50 +938,136 @@ byte buttoncheck()
 //==================================================================================================================
 void loop() {
 
-  Wire.requestFrom(0x08, 8);    // request 8 bytes from slave device #8
-  int i = 0; //counter for each byte as it arrives
+
+  Wire.requestFrom(0x08, 8);  // request 8 bytes from slave device #8
+  int i = 0;                  //counter for each byte as it arrives
   while (Wire.available()) {
-    wireArray[i] = Wire.read(); // every character that arrives it put in order in the empty array "t"
+    wireArray[i] = Wire.read();  // every character that arrives it put in order in the empty array "t"
     i = i + 1;
   }
 
 
-  int val1 = (wireArray[1] << 8) + wireArray[0]; //first two bytes
-  int val2 = (wireArray[3] << 8) + wireArray[2]; //second two bytes
-  int val3 = (wireArray[5] << 8) + wireArray[4]; //third two bytes
-  int val4 = (wireArray[7] << 8) + wireArray[6]; //fourth two bytes
+  int val1 = (wireArray[1] << 8) + wireArray[0];  //first two bytes
+  int val2 = (wireArray[3] << 8) + wireArray[2];  //second two bytes
+  int val3 = (wireArray[5] << 8) + wireArray[4];  //third two bytes
+  int val4 = (wireArray[7] << 8) + wireArray[6];  //fourth two bytes
 
   adcvalue1 = val1;
-  adcvalue2 = val3;
   micvalue = val2;
+  adcvalue2 = val3;
 
-  // Serial.print("BAT: ");
-  // Serial.println(val1);   //shows the data in the array t
-  // Serial.print("MIC: ");
-  // Serial.println(val2);   //shows the data in the array t
-  // Serial.print("HEX CODE: ");
-  // Serial.println(val3, HEX);   //shows the data in the array t
-  // Serial.print("Remote BT: ");
-  // Serial.println(val4);   //shows the data in the array t
+
+  RTC_voltage = adcvalue1 * (3.3 / 1023);  //measured supply after the diode, also meaning max voltage level
+
+
+  // Serial.print("adcvalue1: ");
+  //Serial.println(adcvalue2);   //shows the data in the array t
+  //Serial.print("RTC_voltage: ");
+  //Serial.println(RTC_voltage);   //shows the data in the array t
+
+  // Serial.print("IR BUTTON: ");
+  // Serial.println(val4, HEX);  //shows the data in the array t
+  // Serial.print("Volume:");
+  // Serial.print(volume);  //shows the data in the array t
+
   // Serial.println();
 
-if (val4 == 7) {
-  if(colorset < 8) {
-  colorset++;
+
+
+  //Serial.println(nowday);
+  // Serial.print(".");
+  // Serial.println(nowmonth);
+  //  Serial.print(".");
+  // Serial.println(nowyear);
+
+
+  //mapping IR buttons
+
+  //play = 2
+  //menu = 1
+  //enter = 3
+
+  //Radio Control
+  if (val4 == 2) {
+    if (radiostate == 0) {
+      radiostate = 1;
+      oledpage = 3;
+
+
+    } else {
+      radiostate = 0;
+      oledpage = 0;
+    }
   }
-  else {
-    colorset = 0;
+
+  if (val4 == 7) {
+    if (colorset < 8) {
+      colorset++;
+    } else {
+      colorset = 0;
     }
   }
   if (val4 == 6) {
-   if(colorset > 0) {
-  colorset--;
-  }
-  else {
-    colorset = 8;
+    if (colorset > 0) {
+      colorset--;
+    } else {
+      colorset = 8;
     }
   }
 
+  // Volume Control
+  // 75 menas silent - 0 max volume
+
+  if (val4 == 5) {
+    if (radiostate == 1) {
+      if (volume > 0) {
+        volume--;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
+        radio.setMute(false);
+#endif
+      } else {
+        volume = 0;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
+        radio.setMute(false);
+#endif
+      }
+    } else if (radiostate == 0) {  // controlls brightness while radio is off
+      //do stuff
+    }
+  }
+  if (val4 == 4) {
+    if (radiostate == 1) {  // controlls volume while radio is on
+      if (volume < 40) {
+        volume++;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
+        radio.setMute(false);
+#endif
+      } else {
+        volume = 40;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(true);
+        radio.setMute(true);
+#endif
+      }
+    } else if (radiostate == 0) {  // controlls brightness while radio is off
+      //do stuff
+    }
+  }
+
+  if (val4 == 1) {          //menu button
+    if (radiostate == 1) {  // controlls volume while radio is on
+      radio.seekUp(true);
+    } else if (radiostate == 0) {  // controlls brightness while radio is off
+      //do stuff
+    }
+  }
 
 
   //------
@@ -899,9 +1076,11 @@ if (val4 == 7) {
   static int pattern = 0, lastReading;
   if (millis() - lastUpdate > patternInterval) updatePattern(pattern);
 
-  buttoncheck(); //ckecks button interaction
+  buttoncheck();  //ckecks button interaction
   PopUphandler();
   updatetime();
+
+
 
 
 #ifdef AUTOROTATION
@@ -913,20 +1092,20 @@ if (val4 == 7) {
 
 #ifndef Si7021sensor
     if (page < 1) {
-      if ((animateflag == 0) && (popup == 0)) { //only slide pages when nothing is happening
+      if ((animateflag == 0) && (popup == 0)) {  //only slide pages when nothing is happening
         page = page + 1;
         stepcounter = 0;
-        pagecycletime = rotationtime / 3; //cycle throught temp and humidity pages faster
+        pagecycletime = rotationtime / 3;  //cycle throught temp and humidity pages faster
       }
     }
 #endif
 
-#ifdef Si7021sensor //add humidity page
+#ifdef Si7021sensor  //add humidity page
     if (page < 2) {
-      if ((animateflag == 0) && (popup == 0)) { //only slide pages when nothing is happening
+      if ((animateflag == 0) && (popup == 0)) {  //only slide pages when nothing is happening
         page = page + 1;
         stepcounter = 0;
-        pagecycletime = rotationtime / 3; //cycle throught temp and humidity pages faster
+        pagecycletime = rotationtime / 3;  //cycle throught temp and humidity pages faster
       }
     }
 #endif
@@ -942,66 +1121,6 @@ if (val4 == 7) {
   }
 #endif
 
-
-
-
-  //LEFT BUTTON
-  if (pressedbut == 1) {
-
-    if (colorset < 8) {
-      colorset = colorset + 1;
-    }
-    else {
-      colorset = 0;
-    }
-
-  }
-
-  //RIGHT BUTTON
-  if (pressedbut == 3) {
-    stepcounter = 0; //reset slide animation steps
-
-#ifdef Si7021sensor //add humidity page
-    if (page < 2) {
-      page = page + 1;
-    }
-#endif
-
-#ifdef RTCtemp
-    if (page < 1) {
-      page = page + 1;
-    }
-#endif
-
-    else {
-      page = 0;
-    }
-    Serial.print("Manual page slide:");
-    Serial.println(page);
-  }
-
-  //CENTER BUTTON
-  if (pressedbut == 2) {
-
-    if (alarmstate == 0) {
-
-      if (alarmset == 0) {
-        alarmset = 1;
-
-      }
-      else if (alarmset == 1) {
-        alarmset = 0;
-
-      }
-    }
-    else if (alarmstate == 1) {
-      alarmstate = 0;
-      Serial.println("Alarm buzzer off");
-    }
-
-  }
-
-
   //WIFI BUTTON
   if (pressedbut == 7) {
 
@@ -1011,8 +1130,7 @@ if (val4 == 7) {
       EEPROM.put(wifiStateADDR, wifion);
       EEPROM.commit();
       runserver();
-    }
-    else {
+    } else {
       wifion = 0;
       Serial.println("WiFi OFF");
       EEPROM.put(wifiStateADDR, wifion);
@@ -1021,31 +1139,108 @@ if (val4 == 7) {
       //WiFi.mode(WIFI_OFF);
       serveronline = false;
     }
-
-  }
-
-
-
-  //CENTER BUTTON LONG
-  if (pressedbut == 5) {
-
-    stepcounter = 0;
-    //get current time and alarm-setting for the setting menu
-
-    menu = 1;
-    settime();
   }
 
 
 
 
-  if (page == 0) {
+
+#ifdef RAD
+  if (radiostate == 1) {
+    digitalWrite(stateLED, HIGH);
+  } else {
+    digitalWrite(stateLED, LOW);
+  }
+#endif
+
+#ifndef RAD
+  if (alarmset == 1) {
+    digitalWrite(stateLED, HIGH);
+  } else {
+    digitalWrite(stateLED, LOW);
+  }
+#endif
+
+
+
+  if (radiostate == 0) {
+
+
+    //LEFT BUTTON
+    if (pressedbut == 1) {
+
+      if (colorset < 8) {
+        colorset = colorset + 1;
+      } else {
+        colorset = 0;
+      }
+    }
+
+    //RIGHT BUTTON
+    if (pressedbut == 3) {
+      stepcounter = 0;  //reset slide animation steps
+
+#ifdef Si7021sensor  //add humidity page
+      if (page < 2) {
+        page = page + 1;
+      }
+#endif
+
+#ifdef RTCtemp
+      if (page < 1) {
+        page = page + 1;
+      }
+#endif
+
+      else {
+        page = 0;
+      }
+      Serial.print("Manual page slide:");
+      Serial.println(page);
+    }
+
+    //CENTER BUTTON
+    if ((warningcode == 0) && (popup == 0)) {
+
+      if (pressedbut == 2) {
+
+        if (alarmstate == 0) {
+
+          if (alarmset == 0) {
+            alarmset = 1;
+
+          } else if (alarmset == 1) {
+            alarmset = 0;
+          }
+        } else if (alarmstate == 1) {
+          alarmstate = 0;
+          Serial.println("Alarm buzzer off");
+        }
+      }
+    }
+
+
+
+    //CENTER BUTTON LONG
+    if (pressedbut == 5) {
+      stepcounter = 0;
+      //get current time and alarm-setting for the setting menu
+      menu = 1;
+      settime();
+    }
+  }
+
+
+
+
+
+
+  if ((page == 0) && (menu == 0)) {
 
     // check if animation is triggered
     if (animateflag == 0) {
       updateNumber();
-    }
-    else {
+    } else {
       animate();
     }
   }
@@ -1053,18 +1248,9 @@ if (val4 == 7) {
   else if (page == 1) {
     showtemp();
 
-  }
-  else if (page == 2) {
+  } else if (page == 2) {
     showhumidity();
   }
-
-#ifdef OLED
-  if (popup != 1) {
-    OLEDdraw();
-  }
-#endif
-
-
 
 
 
@@ -1079,22 +1265,11 @@ if (val4 == 7) {
       rtc.writeSqwPinMode(DS3231_OFF);
       rtc.clearAlarm(1);
       Serial.println("Alarm cleared");
-    }
-    else {
+    } else {
       alarmstate = 0;
       rtc.writeSqwPinMode(DS3231_OFF);
       rtc.clearAlarm(1);
     }
-
-  }
-
-
-  if (alarmset == 1) {
-    digitalWrite(stateLED, HIGH);
-    //FIXME
-  }
-  else {
-    digitalWrite(stateLED, LOW);
   }
 
 
@@ -1105,83 +1280,102 @@ if (val4 == 7) {
 
   if (WiFi.status() == WL_CONNECTED) {
     digitalWrite(wifiLED, HIGH);
-  }
-  else {
+  } else {
     digitalWrite(wifiLED, LOW);
   }
 
 
+  if (radiostate != 1) {
+    if (millis() - timeSinceLastOLEDpage > (1000L * 10)) {  //10 sec intervall
 
-  if (millis() - timeSinceLastOLEDpage > (1000L * 10)) { //10 sec intervall
+      //cycle through oled pages every second
 
-    //cycle through oled pages every second
+      if (WiFi.status() == WL_CONNECTED) {  //if we are online, there is a weather page
+        if (oledpage < 2) {
+          oledpage++;
+        } else {
+          oledpage = 0;
+        }
 
-    if (WiFi.status() == WL_CONNECTED) { //if we are online, there is a weather page
-      if (oledpage < 2) {
-        oledpage++;
+      } else {  //if we are not online, there is no weather page
+        if (oledpage < 1) {
+          oledpage++;
+        } else {
+          oledpage = 0;
+        }
       }
-      else {
-        oledpage = 0;
-      }
 
+      timeSinceLastOLEDpage = millis();
     }
-    else { //if we are not online, there is no weather page
-      if (oledpage < 1) {
-        oledpage++;
-      }
-      else {
-        oledpage = 0;
-      }
-
-    }
-
-    timeSinceLastOLEDpage = millis();
   }
 
 
+
+  looptime++;
+
+  if (looptime > 50) {  //delaying the reading
+
+#ifdef IR  //ATTINY required
+           // Checking for the state of the RTC battery
+
+    // measurung requires abaout 1s AFTER startup to ensure correct voltage reading
+
+    if (RTC_voltage <= 2.3) {
+
+      if (dismissed == 0) {
+        warningcode = 4;
+      }
+      Serial.print("RTC_voltage low: ");
+      Serial.println(RTC_voltage);
+    } else {
+      // Serial.print("RTC_voltage: ");
+      // Serial.println(RTC_voltage);
+    }
+#endif
+
+    looptime = 0;
+  }
 }
 
 
-void  updatePattern(int pat) { // call the pattern currently being created
+
+
+
+
+
+
+
+
+
+
+
+
+void updatePattern(int pat) {  // call the pattern currently being created
 
 
   //button actions here
 
   if (colorset == 0) {
     color_rainbowcycle();
-  }
-  else if (colorset == 1) {
+  } else if (colorset == 1) {
     color_rainbow();
-  }
-  else if (colorset == 2) {
+  } else if (colorset == 2) {
     color_cyber();
-  }
-  else if (colorset == 3) {
+  } else if (colorset == 3) {
     color_white();
-  }
-  else if (colorset == 4) {
+  } else if (colorset == 4) {
     color_pink();
-  }
-  else if (colorset == 5) {
+  } else if (colorset == 5) {
     color_velvet();
-  }
-  else if (colorset == 6) {
+  } else if (colorset == 6) {
     color_red();
-  }
-  else if (colorset == 7) {
+  } else if (colorset == 7) {
     color_green();
-  }
-  else if (colorset == 8) {
+  } else if (colorset == 8) {
     color_blue();
-  }
-  else if (colorset == 9) {
+  } else if (colorset == 9) {
     color_cyan();
   }
-
-
-
-
-
 }
 
 
@@ -1194,7 +1388,7 @@ void  updatePattern(int pat) { // call the pattern currently being created
 //==================================================================================================================
 
 
-void color_rainbow() { // modified from Adafruit example to make it a state machine
+void color_rainbow() {  // modified from Adafruit example to make it a state machine
   static uint16_t j = 0;
   for (int i = 0; i < pixels.numPixels(); i++) {
     pixels.setPixelColor(i, Wheel((i + j) & 255));
@@ -1206,7 +1400,7 @@ void color_rainbow() { // modified from Adafruit example to make it a state mach
 
   j++;
   if (j >= 256) j = 0;
-  lastUpdate = millis(); // time for next change to the display
+  lastUpdate = millis();  // time for next change to the display
 }
 
 void color_rainbowcycle() {
@@ -1221,12 +1415,12 @@ void color_rainbowcycle() {
 
   j++;
   if (j >= 256 * 5) j = 0;
-  lastUpdate = millis(); // time for next change to the display
+  lastUpdate = millis();  // time for next change to the display
 }
 void color_cyber() {
   for (int i = 0; i < pixels.numPixels(); i++) {
 
-    uint32_t mint = pixels.Color(0, 250, 180); //CYBER
+    uint32_t mint = pixels.Color(0, 250, 180);  //CYBER
     uint32_t green = pixels.Color(50, 250, 50);
     uint32_t yellow = pixels.Color(250, 200, 0);
     uint32_t pink = pixels.Color(255, 0, 255);
@@ -1244,12 +1438,11 @@ void color_cyber() {
   //delay(50);
 
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 void color_red() {
   for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, 255, 0, 0); //red
+    pixels.setPixelColor(i, 255, 0, 0);  //red
   }
   mapPixels();
   setbrightness();
@@ -1257,12 +1450,11 @@ void color_red() {
 
 
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 void color_green() {
   for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, 0, 255, 0); //green
+    pixels.setPixelColor(i, 0, 255, 0);  //green
   }
   mapPixels();
   setbrightness();
@@ -1270,12 +1462,11 @@ void color_green() {
 
 
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 void color_blue() {
   for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, 0, 0, 255); //blue
+    pixels.setPixelColor(i, 0, 0, 255);  //blue
   }
   mapPixels();
   setbrightness();
@@ -1283,12 +1474,11 @@ void color_blue() {
 
 
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 void color_white() {
   for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, 255, 255, 255); //white
+    pixels.setPixelColor(i, 255, 255, 255);  //white
   }
   mapPixels();
   setbrightness();
@@ -1296,12 +1486,11 @@ void color_white() {
 
 
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 void color_pink() {
   for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, 255, 0, 255); //pink
+    pixels.setPixelColor(i, 255, 0, 255);  //pink
   }
   mapPixels();
   setbrightness();
@@ -1309,24 +1498,22 @@ void color_pink() {
 
 
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 void color_velvet() {
   for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, 255, 255, 0); //velvet
+    pixels.setPixelColor(i, 255, 255, 0);  //velvet
   }
   mapPixels();
   setbrightness();
   pixels.show();
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 
 void color_cyan() {
   for (int i = 0; i < pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, 0, 255, 255); //cyan
+    pixels.setPixelColor(i, 0, 255, 255);  //cyan
   }
   mapPixels();
   setbrightness();
@@ -1334,8 +1521,7 @@ void color_cyan() {
 
 
 
-  lastUpdate = millis(); // time for next change to the display
-
+  lastUpdate = millis();  // time for next change to the display
 }
 
 
@@ -1348,46 +1534,36 @@ void mapPixels() {
   //1st digit definitions number_min2 (counting from right)
   if (number_min2 == 0) {
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 1) {
+  } else if (number_min2 == 1) {
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 2) {
+  } else if (number_min2 == 2) {
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 3) {
+  } else if (number_min2 == 3) {
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 4) {
+  } else if (number_min2 == 4) {
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 5) {
+  } else if (number_min2 == 5) {
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 6) {
+  } else if (number_min2 == 6) {
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 7) {
+  } else if (number_min2 == 7) {
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 8) {
-  }
-  else if (number_min2 == 9) {
+  } else if (number_min2 == 8) {
+  } else if (number_min2 == 9) {
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 10) { //all off code
+  } else if (number_min2 == 10) {  //all off code
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
@@ -1395,24 +1571,20 @@ void mapPixels() {
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 11) { //"c" code
+  } else if (number_min2 == 11) {  //"c" code
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 13) { //"o up" code
+  } else if (number_min2 == 13) {  //"o up" code
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 14) { //"o down" code
+  } else if (number_min2 == 14) {  //"o down" code
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-  }
-  else if (number_min2 == 15) { //"dash" code
+  } else if (number_min2 == 15) {  //"dash" code
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
@@ -1426,46 +1598,36 @@ void mapPixels() {
   //2nd digit definitions number_min1 (counting from right)
   if (number_min1 == 0) {
     pixels.setPixelColor(3 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 1) {
+  } else if (number_min1 == 1) {
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 2) {
+  } else if (number_min1 == 2) {
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 3) {
+  } else if (number_min1 == 3) {
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 4) {
+  } else if (number_min1 == 4) {
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 5) {
+  } else if (number_min1 == 5) {
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 6) {
+  } else if (number_min1 == 6) {
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 7) {
+  } else if (number_min1 == 7) {
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 8) {
-  }
-  else if (number_min1 == 9) {
+  } else if (number_min1 == 8) {
+  } else if (number_min1 == 9) {
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 10) { //all off code
+  } else if (number_min1 == 10) {  //all off code
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
@@ -1473,24 +1635,20 @@ void mapPixels() {
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 11) { //"c" code
+  } else if (number_min1 == 11) {  //"c" code
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 13) { //"o up" code
+  } else if (number_min1 == 13) {  //"o up" code
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 14) { //"o down" code
+  } else if (number_min1 == 14) {  //"o down" code
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-  }
-  else if (number_min1 == 15) { //"dash" code
+  } else if (number_min1 == 15) {  //"dash" code
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
@@ -1502,46 +1660,36 @@ void mapPixels() {
   //3rd digit definitions number_hour2 (counting from right)
   if (number_hour2 == 0) {
     pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 1) {
+  } else if (number_hour2 == 1) {
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 2) {
+  } else if (number_hour2 == 2) {
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 3) {
+  } else if (number_hour2 == 3) {
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 4) {
+  } else if (number_hour2 == 4) {
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 5) {
+  } else if (number_hour2 == 5) {
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 6) {
+  } else if (number_hour2 == 6) {
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 7) {
+  } else if (number_hour2 == 7) {
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 8) {
-  }
-  else if (number_hour2 == 9) {
+  } else if (number_hour2 == 8) {
+  } else if (number_hour2 == 9) {
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 10) { //all off code
+  } else if (number_hour2 == 10) {  //all off code
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
@@ -1549,24 +1697,20 @@ void mapPixels() {
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 11) { //"c" code
+  } else if (number_hour2 == 11) {  //"c" code
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 13) { //"o up" code
+  } else if (number_hour2 == 13) {  //"o up" code
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 14) { //"o down" code
+  } else if (number_hour2 == 14) {  //"o down" code
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour2 == 15) { //"dash" code
+  } else if (number_hour2 == 15) {  //"dash" code
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
@@ -1578,46 +1722,36 @@ void mapPixels() {
   //4th digit definitions number_hour1 (counting from right)
   if (number_hour1 == 0) {
     pixels.setPixelColor(3 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 1) {
+  } else if (number_hour1 == 1) {
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 2) {
+  } else if (number_hour1 == 2) {
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 3) {
+  } else if (number_hour1 == 3) {
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 4) {
+  } else if (number_hour1 == 4) {
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 5) {
+  } else if (number_hour1 == 5) {
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 6) {
+  } else if (number_hour1 == 6) {
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 7) {
+  } else if (number_hour1 == 7) {
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 8) {
-  }
-  else if (number_hour1 == 9) {
+  } else if (number_hour1 == 8) {
+  } else if (number_hour1 == 9) {
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 10) { //all off code
+  } else if (number_hour1 == 10) {  //all off code
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
@@ -1625,24 +1759,20 @@ void mapPixels() {
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 11) { //"c" code
+  } else if (number_hour1 == 11) {  //"c" code
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 13) { //"o up" code
+  } else if (number_hour1 == 13) {  //"o up" code
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 14) { //"o down" code
+  } else if (number_hour1 == 14) {  //"o down" code
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-  }
-  else if (number_hour1 == 15) { //"dash" code
+  } else if (number_hour1 == 15) {  //"dash" code
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
@@ -1654,29 +1784,26 @@ void mapPixels() {
   //dots
   if (page == 0) {
     if (dot == 0) {
-      pixels.setPixelColor(28 , pixels.Color(0, 0, 0));
-      pixels.setPixelColor(29 , pixels.Color(0, 0, 0));
+      pixels.setPixelColor(28, pixels.Color(0, 0, 0));
+      pixels.setPixelColor(29, pixels.Color(0, 0, 0));
+    } else {
     }
-    else {}
-  }
-  else if (page == 1) {
+  } else if (page == 1) {
 
 #ifdef Si7021sensor
-    pixels.setPixelColor(28 , pixels.Color(0, 0, 0));
-    pixels.setPixelColor(29 , pixels.Color(0, 0, 0));
+    pixels.setPixelColor(28, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(29, pixels.Color(0, 0, 0));
 #endif
 
 #ifndef Si7021sensor
-    pixels.setPixelColor(29 , pixels.Color(0, 0, 0));
+    pixels.setPixelColor(29, pixels.Color(0, 0, 0));
 
 #endif
 
+  } else if (page == 2) {
+    pixels.setPixelColor(28, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(29, pixels.Color(0, 0, 0));
   }
-  else if (page == 2) {
-    pixels.setPixelColor(28 , pixels.Color(0, 0, 0));
-    pixels.setPixelColor(29 , pixels.Color(0, 0, 0));
-  }
-
 }
 
 
@@ -1695,36 +1822,35 @@ void setbrightness() {
 
     long lightsum = 0;
     for (int p = 0; p < 100; p++) {
-      lightsum += analogRead(lightsens); //Photo-Resistor
+      lightsum += analogRead(lightsens);  //Photo-Resistor
     }
     lightvalue = lightsum / 100;
 
     //Serial.print("Photosensor: ");
-    //Serial.println(lightvalue);
+    //Serial.println(analogRead(lightsens));
 
-    if (lightvalue < 20) { //value for dark
+    if (lightvalue < 20) {  //value for dark
       lightvalue = 20;
-    }
-    else if (lightvalue > 1000) { //value for bright
+    } else if (lightvalue > 1000) {  //value for bright
       lightvalue = 1000;
     }
 
     lightvalue = map(lightvalue, 20, 1000, 10, 255);
 
-    pixels.setBrightness(lightvalue); //regulates the brightness of the whole strip
+    pixels.setBrightness(lightvalue);  //regulates the brightness of the whole strip
 
 #ifdef OLED
-    u8g2.setContrast(lightvalue); //set brightness of the OLED
+    u8g2.setContrast(lightvalue);  //set brightness of the OLED
 #endif
 
 #endif
 
 
 #ifndef LightSensor
-    pixels.setBrightness(150); //max brightness if "LightSensor" not defined
+    pixels.setBrightness(150);  //max brightness if "LightSensor" not defined
 
 #ifdef OLED
-    u8g2.setContrast(255); //max brightness if "LightSensor" not defined
+    u8g2.setContrast(255);  //max brightness if "LightSensor" not defined
 #endif
 
 #endif
@@ -1741,8 +1867,7 @@ void setbrightness() {
         if (b == 125) {
           tone(buzzer, 2900, 100);
         }
-      }
-      else if (b >= 250) {
+      } else if (b >= 250) {
         d = 1;
         b = 250;
         tone(buzzer, 2900, 100);
@@ -1752,8 +1877,7 @@ void setbrightness() {
     else {
       if (b > 0) {
         b = b - 25;
-      }
-      else if (b <= 0) {
+      } else if (b <= 0) {
         d = 0;
         b = 0;
       }
@@ -1772,23 +1896,21 @@ void setbrightness() {
 //==================================================================================================================
 void updateNumber() {
 
-  number_hour2 = (nowhour % 10); //last digit of the hours
+  number_hour2 = (nowhour % 10);  //last digit of the hours
 
   if (nowhour < 10) {
     number_hour1 = 0;
-  }
-  else {
-    number_hour1 = (nowhour / 10U) % 10; //first digit of the hours
+  } else {
+    number_hour1 = (nowhour / 10U) % 10;  //first digit of the hours
   }
 
-  number_min2 = (nowminute % 10); //last digit of the seconds
+  number_min2 = (nowminute % 10);  //last digit of the seconds
 
 
   if (nowminute < 10) {
     number_min1 = 0;
-  }
-  else {
-    number_min1 = (nowminute / 10U) % 10; //first digit of the seconds
+  } else {
+    number_min1 = (nowminute / 10U) % 10;  //first digit of the seconds
   }
 
 
@@ -1799,8 +1921,7 @@ void updateNumber() {
       animateflag = 1;
       number_min2 = 0;
       Serial.println("Digit animation start - minute setting");
-    }
-    else {
+    } else {
       animateflag = 0;
     }
   }
@@ -1811,29 +1932,27 @@ void updateNumber() {
       animateflag = 1;
       number_min1 = 0;
       Serial.println("Digit-animation start - ten minute setting");
-    }
-    else {
+    } else {
       animateflag = 0;
     }
   }
 
-  else {    }
-
-
+  else {
+  }
 }
 
 
 
 void getTempHum() {
 
-  if (sensorupdateflag == 1) { //initial mesurment after boot
+  if (sensorupdateflag == 1) {  //initial mesurment after boot
 
 #ifdef Si7021sensor
-    float c = sensor.readTemperature(); //temp in celsius
+    float c = sensor.readTemperature();  //temp in celsius
     float h = sensor.readHumidity();
 
 #ifdef Temp_F
-    c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
+    c = c * 9.0 / 5.0 + 32.0;  //convert to fahrenheit
 #endif
 
 #endif
@@ -1844,7 +1963,7 @@ void getTempHum() {
     float c = rtcTemp;
 
 #ifdef Temp_F
-    c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
+    c = c * 9.0 / 5.0 + 32.0;  //convert to fahrenheit
 #endif
 
 #endif
@@ -1860,9 +1979,8 @@ void getTempHum() {
 
 #endif
 
-    sensorupdateflag = 0; //disable the firs measurement
-  }
-  else {
+    sensorupdateflag = 0;  //disable the firs measurement
+  } else {
 
 
 
@@ -1874,11 +1992,11 @@ void getTempHum() {
       if (tempsamplecount < 5) {
 
 #ifdef Si7021sensor
-        float c = sensor.readTemperature(); //temp in celsius
+        float c = sensor.readTemperature();  //temp in celsius
         float h = sensor.readHumidity();
 
 #ifdef Temp_F
-        c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
+        c = c * 9.0 / 5.0 + 32.0;  //convert to fahrenheit
 #endif
 
 #endif
@@ -1892,7 +2010,7 @@ void getTempHum() {
         //float c = rtcTemp / 4.; //convert to cnumpixelsius
 
 #ifdef Temp_F
-        c = c * 9.0 / 5.0 + 32.0; //convert to fahrenheit
+        c = c * 9.0 / 5.0 + 32.0;  //convert to fahrenheit
 #endif
 
 #endif
@@ -1922,7 +2040,7 @@ void getTempHum() {
         newtemp = round(buffertemp);
         digittemp = newtemp * 10;
 
-        buffertemp = 0; //reset buffer
+        buffertemp = 0;  //reset buffer
 
 
 #ifdef Si7021sensor
@@ -1932,18 +2050,15 @@ void getTempHum() {
         newhum = round(bufferhum);
         digithum = newhum * 10;
 
-        bufferhum = 0; //reset buffer
+        bufferhum = 0;  //reset buffer
 #endif
 
-        tempsamplecount = 0; //reset the sample counter
+        tempsamplecount = 0;  //reset the sample counter
         sensorupdateflag = 1;
-
       }
     }
-
   }
   return;
-
 }
 
 
@@ -1959,14 +2074,13 @@ void showtemp() {
 
     //draw a "dash" while waiting for data first time
     if (digittemp == 0) {
-      number_hour1 = 15; //dash
-      number_hour2 = 15; //dash
-      number_min1 = 13; //code for c
-      number_min2 = 11; //code for "°"
+      number_hour1 = 15;  //dash
+      number_hour2 = 15;  //dash
+      number_min1 = 13;   //code for c
+      number_min2 = 11;   //code for "°"
 
       //Serial.println("No avg. data yet, waiting…");
-    }
-    else {
+    } else {
 
       unsigned long currentAniMillis = millis();
 
@@ -1976,8 +2090,7 @@ void showtemp() {
         if (stepcounter < 4) {
           stepcounter++;
 
-        }
-        else {
+        } else {
           stepcounter = 4;
         }
 
@@ -1988,53 +2101,42 @@ void showtemp() {
       if (stepcounter == 1) {
         //Slide Animation
         //1st step
-        number_hour1 = (nowhour % 10); //last digit of the hours
+        number_hour1 = (nowhour % 10);  //last digit of the hours
 
         if (nowminute > 9) {
-          number_hour2 = (nowminute / 10U) % 10; //first min digit
-        }
-        else {
+          number_hour2 = (nowminute / 10U) % 10;  //first min digit
+        } else {
           number_hour2 = 0;
         }
-        number_min1 = (nowminute % 10); //second min digit
-        number_min2 = (digittemp / 100U) % 10; //first digit of temp
-      }
-      else if (stepcounter == 2) {
+        number_min1 = (nowminute % 10);         //second min digit
+        number_min2 = (digittemp / 100U) % 10;  //first digit of temp
+      } else if (stepcounter == 2) {
         //2nd step
         if (nowminute > 9) {
-          number_hour1 = (nowminute / 10U) % 10; //first min digit
-        }
-        else {
+          number_hour1 = (nowminute / 10U) % 10;  //first min digit
+        } else {
           number_hour1 = 0;
         }
-        number_hour2 = (nowminute % 10); //second min digit
-        number_min1 = (digittemp / 100U) % 10; //first digit of temp
-        number_min2 = (digittemp / 10U) % 10; //first digit of temp
+        number_hour2 = (nowminute % 10);        //second min digit
+        number_min1 = (digittemp / 100U) % 10;  //first digit of temp
+        number_min2 = (digittemp / 10U) % 10;   //first digit of temp
       }
 
       else if (stepcounter == 3) {
         //3rd step
-        number_hour1 = (nowminute % 10); //second min digit
-        number_hour2 = (digittemp / 100U) % 10; //first digit of temp
-        number_min1 = (digittemp / 10U) % 10; //first digit of temp
+        number_hour1 = (nowminute % 10);         //second min digit
+        number_hour2 = (digittemp / 100U) % 10;  //first digit of temp
+        number_min1 = (digittemp / 10U) % 10;    //first digit of temp
         number_min2 = 13;
-      }
-      else {
+      } else {
         //4th step
-        number_hour1 = (digittemp / 100U) % 10; //first digit of temp
-        number_hour2 = (digittemp / 10U) % 10; //second digit of temp
-        number_min1 = 13; //code for c
-        number_min2 = 11; //code for "°"
+        number_hour1 = (digittemp / 100U) % 10;  //first digit of temp
+        number_hour2 = (digittemp / 10U) % 10;   //second digit of temp
+        number_min1 = 13;                        //code for c
+        number_min2 = 11;                        //code for "°"
       }
-
-
-
-
-
     }
-
   }
-
 }
 
 
@@ -2046,10 +2148,10 @@ void showtemp() {
 void showhumidity() {
 
   if (newhum == 0) {
-    number_hour1 = 15; //dash
-    number_hour2 = 15; //dash
-    number_min1 = 13; //code for "0up"  %
-    number_min2 = 14; //code for "0down"  %
+    number_hour1 = 15;  //dash
+    number_hour2 = 15;  //dash
+    number_min1 = 13;   //code for "0up"  %
+    number_min2 = 14;   //code for "0down"  %
     // Serial.println("No avg. data yet, waiting…");
   }
 
@@ -2063,49 +2165,41 @@ void showhumidity() {
       if (stepcounter < 4) {
         stepcounter++;
 
-      }
-      else {
+      } else {
         stepcounter = 4;
       }
-
     }
     if (stepcounter == 1) {
       //Slide Animation
       //1st step
 
 
-      number_hour1 = (digittemp / 10U) % 10; //second digit of temp
-      number_hour2 = 13; //code for c
-      number_min1 = 11; //code for "°"
-      number_min2 = (digithum / 100U) % 10; //first digit of temp
-    }
-    else if (stepcounter == 2) {
+      number_hour1 = (digittemp / 10U) % 10;  //second digit of temp
+      number_hour2 = 13;                      //code for c
+      number_min1 = 11;                       //code for "°"
+      number_min2 = (digithum / 100U) % 10;   //first digit of temp
+    } else if (stepcounter == 2) {
       //2nd step
-      number_hour1 = 13; //code for c
-      number_hour2 = 11; //code for "°"
-      number_min1 = (digithum / 100U) % 10; //first digit of temp
-      number_min2 = (digithum / 10U) % 10; //second digit of temp
+      number_hour1 = 13;                     //code for c
+      number_hour2 = 11;                     //code for "°"
+      number_min1 = (digithum / 100U) % 10;  //first digit of temp
+      number_min2 = (digithum / 10U) % 10;   //second digit of temp
     }
 
     else if (stepcounter == 3) {
       //3rd step
-      number_hour1 = 11; //code for "°"
-      number_hour2 = (digithum / 100U) % 10; //first digit of temp
-      number_min1 = (digithum / 10U) % 10; //second digit of temp
-      number_min2 = 13; //code for "°"  %
-    }
-    else {
+      number_hour1 = 11;                      //code for "°"
+      number_hour2 = (digithum / 100U) % 10;  //first digit of temp
+      number_min1 = (digithum / 10U) % 10;    //second digit of temp
+      number_min2 = 13;                       //code for "°"  %
+    } else {
       //4th step
-      number_hour1 = (digithum / 100U) % 10; //first digit of temp
-      number_hour2 = (digithum / 10U) % 10; //second digit of temp
-      number_min1 = 13; //code for "°"  %
-      number_min2 = 14; //code for "°"  %
+      number_hour1 = (digithum / 100U) % 10;  //first digit of temp
+      number_hour2 = (digithum / 10U) % 10;   //second digit of temp
+      number_min1 = 13;                       //code for "°"  %
+      number_min2 = 14;                       //code for "°"  %
     }
-
-
   }
-
-
 }
 
 
@@ -2114,52 +2208,52 @@ void showhumidity() {
 //SET TIME FUNCTION
 //==================================================================================================================
 void settime() {
-
-
   newhours = nowhour;
   newminutes = nowminute;
   newalarmhours = alarmhours;
   newalarmminutes = alarmminutes;
+  newday = nowday;
+  newmonth = nowmonth;
+  newyear = nowyear;
+
 
   Serial.println("entered menu");
-  Serial.print("newhours:");
-  Serial.print(newhours);
-  Serial.print(", newminutes:");
-  Serial.println(newminutes);
+  //Serial.print("newhours:");
+  //Serial.print(newhours);
+  //Serial.print(", newminutes:");
+  //Serial.println(newminutes);
 
   delay(100);
 
   while (menu == 1) {
     buttoncheck();
-
-
-
-    delay(50);
+#ifdef OLED
+    OLEDdraw();
+#endif
+    //delay(50);
 
     uint32_t off = pixels.Color(0, 0, 0);
     uint32_t white = pixels.Color(255, 255, 255);
     uint32_t red = pixels.Color(255, 0, 0);
-
+    uint32_t green = pixels.Color(0, 255, 0);
 
 
     if ((menustep == 0) || (menustep == 1)) {
       //display time digits
       pixels.fill(white, 0, 29);
 
-      number_hour2 = (newhours % 10); //last digit of the seconds
+      number_hour2 = (newhours % 10);  //last digit of the seconds
       if (newhours < 10) {
         number_hour1 = 0;
-      }
-      else {
-        number_hour1 = (newhours / 10U) % 10; //first digit of the seconds
+      } else {
+        number_hour1 = (newhours / 10U) % 10;  //first digit of the seconds
       }
 
-      number_min2 = (newminutes % 10); //last digit of the seconds
+      number_min2 = (newminutes % 10);  //last digit of the seconds
       if (newminutes < 10) {
         number_min1 = 0;
-      }
-      else {
-        number_min1 = (newminutes / 10U) % 10; //first digit of the seconds
+      } else {
+        number_min1 = (newminutes / 10U) % 10;  //first digit of the seconds
       }
     }
 
@@ -2168,33 +2262,66 @@ void settime() {
       pixels.fill(red, 0, 29);
 
 
-      number_hour2 = (newalarmhours % 10); //last digit of the seconds
+      number_hour2 = (newalarmhours % 10);  //last digit of the seconds
       if (newalarmhours < 10) {
         number_hour1 = 0;
-      }
-      else {
-        number_hour1 = (newalarmhours / 10U) % 10; //first digit of the seconds
+      } else {
+        number_hour1 = (newalarmhours / 10U) % 10;  //first digit of the seconds
       }
 
-      number_min2 = (newalarmminutes % 10); //last digit of the seconds
+      number_min2 = (newalarmminutes % 10);  //last digit of the seconds
       if (newalarmminutes < 10) {
         number_min1 = 0;
-      }
-      else {
-        number_min1 = (newalarmminutes / 10U) % 10; //first digit of the seconds
+      } else {
+        number_min1 = (newalarmminutes / 10U) % 10;  //first digit of the seconds
       }
     }
 
 
+    else if ((menustep == 4) || (menustep == 5)) {
+      //display alarm digits
+      pixels.fill(green, 0, 29);
 
+
+      number_hour2 = (newday % 10);  //last digit of the seconds
+      if (newday < 10) {
+        number_hour1 = 0;
+      } else {
+        number_hour1 = (newday / 10U) % 10;  //first digit of the seconds
+      }
+
+      number_min2 = (newmonth % 10);  //last digit of the seconds
+      if (newmonth < 10) {
+        number_min1 = 0;
+      } else {
+        number_min1 = (newmonth / 10U) % 10;  //first digit of the seconds
+      }
+
+    }
+
+    else if (menustep == 6) {
+      //display alarm digits
+      pixels.fill(green, 0, 13);
+      pixels.fill(green, 14, 29);
+      pixels.fill(off, 28, 29);  // year
+
+
+      Serial.print("newyear >:");
+      Serial.println(newhours);
+
+      number_min2 = (newyear % 10);
+      number_min1 = ((newyear / 10U) % 10);
+      number_hour2 = ((newyear / 100) % 10);
+      number_hour1 = (newyear / 1000);
+    }
 
 
     //time set routine:
 
     if (menustep == 0) {
 
-      pixels.fill(off, 0, 14); // hours
-      pixels.fill(off, 28, 29); //dots
+      pixels.fill(off, 0, 14);   // hours
+      pixels.fill(off, 28, 29);  //dots
 
       Serial.print("newhours >:");
       Serial.println(newhours);
@@ -2207,22 +2334,19 @@ void settime() {
         if (newhours < 23) {
           newhours += 1;
 
-        }
-        else {
+        } else {
           newhours = 0;
         }
       }
       if (pressedbut == 3) {
         if (newhours > 0) {
           newhours -= 1;
-        }
-        else {
+        } else {
           newhours = 23;
         }
       }
-    }
-    else if (menustep == 1) {
-      pixels.fill(off, 14, 30); // minutes and dots
+    } else if (menustep == 1) {
+      pixels.fill(off, 14, 30);  // minutes and dots
 
       Serial.print("newminutes >:");
       Serial.println(newminutes);
@@ -2234,23 +2358,20 @@ void settime() {
       if (pressedbut == 1) {
         if (newminutes < 59) {
           newminutes += 1;
-        }
-        else {
+        } else {
           newminutes = 0;
         }
       }
       if (pressedbut == 3) {
         if (newminutes > 0) {
           newminutes -= 1;
-        }
-        else {
+        } else {
           newminutes = 59;
         }
       }
-    }
-    else if (menustep == 2) {
-      pixels.fill(off, 0, 14); // hours
-      pixels.fill(off, 28, 29); //dots
+    } else if (menustep == 2) {
+      pixels.fill(off, 0, 14);   // hours
+      pixels.fill(off, 28, 29);  //dots
 
       Serial.print("newalarmhours >:");
       Serial.println(newalarmhours);
@@ -2262,63 +2383,136 @@ void settime() {
       if (pressedbut == 1) {
         if (newalarmhours < 23) {
           newalarmhours += 1;
-        }
-        else {
+        } else {
           newalarmhours = 0;
         }
       }
       if (pressedbut == 3) {
         if (newalarmhours > 0) {
           newalarmhours -= 1;
-        }
-        else {
+        } else {
           newalarmhours = 23;
         }
       }
-    }
-    else if (menustep == 3) {
-      pixels.fill(off, 14, 30); // minutes and dots
+    } else if (menustep == 3) {
+      pixels.fill(off, 14, 30);  // minutes and dots
 
       Serial.print("newalarmminutes >:");
       Serial.println(newalarmminutes);
 
-      //edit minutes
+      //edit alarm minutes
       if (pressedbut == 2) {
-        menustep = 0;
+        menustep = 4;
       }
       if (pressedbut == 1) {
         if (newalarmminutes < 59) {
           newalarmminutes += 1;
-        }
-        else {
+        } else {
           newalarmminutes = 0;
         }
       }
       if (pressedbut == 3) {
         if (newalarmminutes > 0) {
           newalarmminutes -= 1;
-        }
-        else {
+        } else {
           newalarmminutes = 59;
         }
       }
     }
-    mapPixels();
-    setbrightness();
-    pixels.show();
-    delay(10);
+
+    else if (menustep == 4) {
+      //pixels.fill(off, 14, 30);  // minutes and dots
+      pixels.fill(off, 0, 14);  // day
+
+      Serial.print("newday >:");
+      Serial.println(newday);
+
+      //edit day
+      if (pressedbut == 2) {
+        menustep = 5;
+      }
+      if (pressedbut == 1) {
+        if (newday < 31) {
+          newday += 1;
+        } else {
+          newday = 1;
+        }
+      }
+      if (pressedbut == 3) {
+        if (newday > 1) {
+          newday -= 1;
+        } else {
+          newday = 31;
+        }
+      }
+    }
+
+    else if (menustep == 5) {
+      pixels.fill(off, 14, 30);  // minutes and dots
+      //pixels.fill(off, 0, 14);   // month
+
+      Serial.print("newmonth >:");
+      Serial.println(newmonth);
+
+      //edit day
+      if (pressedbut == 2) {
+        menustep = 6;
+      }
+      if (pressedbut == 1) {
+        if (newmonth < 12) {
+          newmonth += 1;
+        } else {
+          newmonth = 1;
+        }
+      }
+      if (pressedbut == 3) {
+        if (newmonth > 1) {
+          newmonth -= 1;
+        } else {
+          newmonth = 12;
+        }
+      }
+    }
+
+    else if (menustep == 6) {
+      //pixels.fill(off, 14, 30);  // minutes and dots
+      //pixels.fill(off, 14, 16); //turn off dots
+
+
+      Serial.print("newyear >:");
+      Serial.println(newyear);
+
+      //edit day
+      if (pressedbut == 2) {
+        menustep = 0;
+      }
+      if (pressedbut == 1) {
+        newyear += 1;
+      }
+      if (pressedbut == 3) {
+        newyear -= 1;
+      }
+    }
+
+
+
+
 
 
     if (pressedbut == 5) {
 
 
-      //FIXME set date
-      if ((newhours != nowhour) || (newminutes != nowminute)) { //check if something was actually changed
+      //set date
+      if ((newhours != nowhour) || (newminutes != nowminute) || (newday != nowday) || (newmonth != nowmonth) || (newyear != nowyear)) {  //check if something was actually changed
 
         nowhour = newhours;
         nowminute = newhours;
+        nowday = newday;
+        nowmonth = newmonth;
+        nowyear = newyear;
 
-        rtc.adjust(DateTime(2020, 12, 30, newhours, newminutes, 0));
+
+        rtc.adjust(DateTime(newyear, newmonth, newday, newhours, newminutes, 0));
         DateTime now = rtc.now();
 
         Serial.print("TIME SAVED:");
@@ -2327,11 +2521,11 @@ void settime() {
         Serial.println(newminutes);
       }
 
-      if ((newalarmhours != alarmhours) || (newalarmminutes != alarmminutes)) { //check if something was actually changed
+      if ((newalarmhours != alarmhours) || (newalarmminutes != alarmminutes)) {  //check if something was actually changed
 
         rtc.writeSqwPinMode(DS3231_OFF);
         rtc.disableAlarm(2);
-        rtc.setAlarm1(DateTime(2020, 12, 30, newalarmhours, newalarmminutes, 0), DS3231_A1_Hour);
+        rtc.setAlarm1(DateTime(newyear, newmonth, newday, newalarmhours, newalarmminutes, 0), DS3231_A1_Hour);
 
         Serial.print("ALARM SAVED:");
         Serial.print(newalarmhours);
@@ -2349,6 +2543,12 @@ void settime() {
       menustep = 0;
       menu = 0;
     }
+    mapPixels();
+    setbrightness();
+    pixels.show();
+    //delay(10);
+
+    yield();
   }
 }
 
@@ -2389,7 +2589,7 @@ void animate() {
           //animation every minute
           if (animationsetting == 1) {
 
-            number_min2 = (nowminute % 10); //second digit of the seconds
+            number_min2 = (nowminute % 10);  //second digit of the seconds
             digitbuffer = number_min2;
           }
 
@@ -2410,7 +2610,6 @@ void animate() {
     else {
 
       return;
-
     }
   }
 }
@@ -2421,8 +2620,7 @@ void animate() {
 
 //Format digits for SERIAL
 //==================================================================================================================
-void printDigits(int digits)
-{
+void printDigits(int digits) {
   // utility function for digital clock display: prints preceding colon and leading 0
   Serial.print(':');
   if (digits < 10) {
@@ -2457,26 +2655,44 @@ void PopUphandler() {
 
     if (popcounter >= poptime) {
       //popup timeout
-      Serial.println("Popup timeout");
+      //Serial.println("Popup timeout");
 
+      //FIXME saving to eeprom only when a change is happened
       EEPROM.put(alarmStateADDR, alarmset);
       EEPROM.put(colorADDR, colorset);
       EEPROM.commit();
-      Serial.println("Settings saved");
+
+      //u8g2.clear();
+      popup = 0;
+      //Serial.println("ZERO");
 
       popcounter = 0;
-      popup = 0;
-    }
-    else {
+
+    } else {
       popup = 1;
     }
+  } else {
+#ifdef OLED
+    OLEDdraw();
+#endif
   }
+
+
+  if (warningcode != 0) {
+    popcounter = 0;
+    poptime = 2000;  //longer warning value
+    popup = 1;
+    Serial.print("WARNING DETECTED:");
+    Serial.println(warningcode);
+    warningpopup();
+  }
+
 
 
   if (colorset != old_colorset) {
     tone(buzzer, 100, 50);
     popcounter = 0;
-    poptime = 1000; //default value
+    poptime = 1000;  //default value
     popup = 1;
     Serial.print("Color change detected:");
     Serial.println(colorset);
@@ -2488,7 +2704,7 @@ void PopUphandler() {
   else if (alarmset != old_alarmset) {
     tone(buzzer, 100, 50);
     popcounter = 0;
-    poptime = 1000; //default value
+    poptime = 1000;  //default value
     popup = 1;
     Serial.print("Alarm change detected:");
     Serial.println(alarmset);
@@ -2502,7 +2718,7 @@ void PopUphandler() {
     popcounter = 0;
     if (wifion == 1) {
       updateflag = 1;
-      poptime = 1000; //needed more time for the popup to read the ip adress
+      poptime = 1000;  //needed more time for the popup to read the ip adress
     }
     popup = 1;
     Serial.print("WiFi state change detected:");
@@ -2513,8 +2729,8 @@ void PopUphandler() {
 
   else if (brightness != old_brightness) {
     Serial.println("brightness-pop triggered");
-    poptime = 1000; //default value
-    //popup = 1;
+    poptime = 1000;  //default value
+                     //popup = 1;
 
 #ifdef OLED
     //brightnesspopup();
@@ -2525,21 +2741,20 @@ void PopUphandler() {
   }
 
   else if (volume != old_volume) {
-    Serial.println("volume-pop triggered");
-    poptime = 1000; //default value
-    popup = 1;
 
-#ifdef OLED
-    //volumepopup();
-#endif
-
-    old_volume = volume;
     tone(buzzer, 100, 50);
+    popcounter = 0;
+    poptime = 1000;  //default value
+
+    popup = 1;
+    Serial.print("Volume change detected:");
+    volumepopup();
+    old_volume = volume;
+  } else {
   }
 
 
   //exit;
-
 }
 
 
@@ -2560,11 +2775,9 @@ void connectstate() {
       if (WiFi.status() != WL_CONNECTED) {
         u8g2.clear();
         u8g2.print("CONNECTING...");
-      }
-      else {
+      } else {
         //do stuff
       }
-
     }
 
     while (AP_mode == true) {
@@ -2572,7 +2785,7 @@ void connectstate() {
       u8g2.setCursor(0, 24);
       u8g2.print("AP MODE!");
     }
-  } while ( u8g2.nextPage() );
+  } while (u8g2.nextPage());
 #endif
 }
 
@@ -2582,18 +2795,18 @@ void alarmpopup() {
   do {
 
     if (popup == 1) {
-      u8g2.setFont(u8g2_font_6x10_tf);
+      //u8g2.setFont(u8g2_font_6x10_tf);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
       u8g2.setCursor(0, 24);
       u8g2.print("ALARM: ");
       if (alarmset == 1) {
         u8g2.print("ON");
-      }
-      else {
+      } else {
         u8g2.print("OFF");
       }
     }
 
-  } while ( u8g2.nextPage() );
+  } while (u8g2.nextPage());
 #endif
 }
 
@@ -2608,17 +2821,15 @@ void wifipopup() {
 
       if (wifion == 0) {
         u8g2.print("WIFI: OFF");
-      }
-      else {
+      } else {
         u8g2.print("WIFI CONNECTED");
         u8g2.setCursor(0, 33);
         u8g2.print("IP: ");
         u8g2.print(WiFi.localIP());
       }
-
     }
 
-  } while ( u8g2.nextPage() );
+  } while (u8g2.nextPage());
 #endif
 }
 
@@ -2629,66 +2840,53 @@ void colorpopup() {
 
     if (popup == 1) {
 
-
-
-      u8g2.setFont(u8g2_font_crox2hb_tf);
+      //u8g2.setFont(u8g2_font_crox2hb_tf);
+      //u8g2.setFont(u8g2_font_logisoso18_tn);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
       byte width = u8g2.getDisplayWidth();
 
       if (colorset == 0) {
-        byte pos = ((width - (u8g2.getUTF8Width("Rainbow Cycle"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
-        u8g2.print("Rainbow Cycle");
-      }
-      else if (colorset == 1) {
-        byte pos = ((width - (u8g2.getUTF8Width("Rainbow"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
-        u8g2.print("Rainbow");
-      }
-      else if (colorset == 2) {
-        byte pos = ((width - (u8g2.getUTF8Width("CyberPunk"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
+        byte pos = ((width - (u8g2.getUTF8Width("Rainbow 2"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
+        u8g2.print("Rainbow 1");
+      } else if (colorset == 1) {
+        byte pos = ((width - (u8g2.getUTF8Width("Rainbow"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
+        u8g2.print("Rainbow 2");
+      } else if (colorset == 2) {
+        byte pos = ((width - (u8g2.getUTF8Width("CyberPunk"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
         u8g2.print("CyberPunk");
-      }
-      else if (colorset == 3) {
-        byte pos = ((width - (u8g2.getUTF8Width("White"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
+      } else if (colorset == 3) {
+        byte pos = ((width - (u8g2.getUTF8Width("White"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
         u8g2.print("White");
-      }
-      else if (colorset == 4) {
-        byte pos = ((width - (u8g2.getUTF8Width("Pink"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
+      } else if (colorset == 4) {
+        byte pos = ((width - (u8g2.getUTF8Width("Pink"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
         u8g2.print("Pink");
-      }
-      else if (colorset == 5) {
-        byte pos = ((width - (u8g2.getUTF8Width("Yellow"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
+      } else if (colorset == 5) {
+        byte pos = ((width - (u8g2.getUTF8Width("Yellow"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
         u8g2.print("Yellow");
-      }
-      else if (colorset == 6) {
-        byte pos = ((width - (u8g2.getUTF8Width("Red"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
+      } else if (colorset == 6) {
+        byte pos = ((width - (u8g2.getUTF8Width("Red"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
         u8g2.print("Red");
-      }
-      else if (colorset == 7) {
-        byte pos = ((width - (u8g2.getUTF8Width("Green"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
+      } else if (colorset == 7) {
+        byte pos = ((width - (u8g2.getUTF8Width("Green"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
         u8g2.print("Green");
-      }
-      else if (colorset == 8) {
-        byte pos = ((width - (u8g2.getUTF8Width("Blue"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
+      } else if (colorset == 8) {
+        byte pos = ((width - (u8g2.getUTF8Width("Blue"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
         u8g2.print("Blue");
       }
-      else {
-        byte pos = ((width - (u8g2.getUTF8Width("X"))) / 2); //calculate the text lenght
-        u8g2.setCursor(pos, 21);
-        u8g2.print("X");
-      }
-
-
+    } else {
+      break;
     }
 
-  } while ( u8g2.nextPage() );
+  } while (u8g2.nextPage());
 #endif
 }
 
@@ -2699,12 +2897,48 @@ void brightnesspopup() {
 
     if (popup == 1) {
       u8g2.setFont(u8g2_font_6x10_tf);
-      u8g2.setCursor(0, 21);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+
+      u8g2.setCursor(0, 25);
       u8g2.print("NEW BRIGHT:");
       u8g2.print(brightness);
     }
 
-  } while ( u8g2.nextPage() );
+  } while (u8g2.nextPage());
+#endif
+}
+
+void warningpopup() {
+#ifdef OLED
+  u8g2.firstPage();
+  do {
+
+    if (popup == 1) {
+      u8g2.setFont(u8g2_font_6x10_tf);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+
+      u8g2.setCursor(0, 25);
+
+      if (warningcode == 1) {
+        u8g2.print("Si7021 init");  //sensor issue
+      } else if (warningcode == 2) {
+        u8g2.print("FS Error");  //filesystem issue
+      } else if (warningcode == 3) {
+        u8g2.print("PwrlossRTC");  //RTC lost power
+      } else if (warningcode == 4) {
+        u8g2.print("RTC LowBat");  //RTC batt issue
+      } else if (warningcode == 5) {
+        u8g2.print("RTC init");  //RTC init issue
+      }
+
+      if (pressedbut == 2) {
+        dismissed = 1;
+        warningcode = 0;
+        Serial.print("Warning dismissed");
+      }
+    }
+
+  } while (u8g2.nextPage());
 #endif
 }
 
@@ -2716,12 +2950,20 @@ void volumepopup() {
 
     if (popup == 1) {
       u8g2.setFont(u8g2_font_6x10_tf);
-      u8g2.setCursor(0, 21);
-      u8g2.print("NEW VOLUME:");
-      u8g2.print(volume);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+
+      u8g2.setCursor(0, 25);
+      u8g2.print("VOLUME:");
+      byte displ_vol = map(volume, 0, 40, 100, 0);
+      //byte vol_bar = map(displ_vol, 0, 40, 0, 100);
+      u8g2.print(displ_vol);
+      u8g2.drawBox(0, 31, displ_vol, 5);
+    } else {
     }
 
-  } while ( u8g2.nextPage() );
+
+
+  } while (u8g2.nextPage());
 #endif
 }
 
@@ -2729,37 +2971,84 @@ void volumepopup() {
 #ifdef OLED
 void OLEDdraw() {
 
-  //Serial.print("wifiState:");
+  //Serial.println(menu);
+
+
   //Serial.println(wifiState);
   //Serial.print("module:");
   //Serial.println(wifimodule);
+
+  //Serial.println("OLEDdraw loop");
 
   u8g2.firstPage();
   do {
 
     const char DEGREE_SYMBOL[] = { 0xB0, '\0' };
 
-double micvolts = (micvalue*3.3)/1024;
+    double micvolts = (micvalue * 3.05) / 1023;
 
-if (micvalue < 200) {
-  //micvalue = 200;
-  }
+
+    if (micvalue > 150) {
+      micvalue = 150;
+    }
+
+    if (micvalue < 6) {
+      micvalue = 0;
+    }
+
+    byte soundval = map(micvalue, 0, 150, 1, 128);  //was 90
+
+
+
 
     //u8g2.drawFrame(0, 0, 96, 16);
-    u8g2.drawRFrame(0, 0, 128, 32, 16);
-      
-    byte soundval = map(micvolts, 0, 3.3, 1, 90);
-    u8g2.drawBox(0, 36, soundval, 6);
-    
-    u8g2.setCursor(100, 43);
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.print(adcvalue1);
-    
+    //u8g2.drawRFrame(0, 0, 128, 32, 0);
+
+
+    if (menu == 1) {
+
+      if (menustep == 0) {  //HOURS
+        oledpage = 5;
+      } else if (menustep == 1) {  //MINUTES
+        oledpage = 6;
+      }
+
+      else if (menustep == 2) {  //AL HOURS
+        oledpage = 7;
+      }
+
+      else if (menustep == 3) {  //AL MINUTES
+        oledpage = 8;
+      }
+
+      else if (menustep == 4) {  //DAY
+        oledpage = 9;
+      } else if (menustep == 5) {  //MONTH
+        oledpage = 10;
+      } else if (menustep == 6) {  //YEAR
+        oledpage = 11;
+      }
+    }
+
+
+
+
+
+
 
     if (oledpage == 0) {
 
-      u8g2.setCursor(19, 21);
-      u8g2.setFont(u8g2_font_crox2hb_tf);
+
+
+      u8g2.setCursor(100, 43);
+      u8g2.setFont(u8g2_font_6x10_tf);
+      u8g2.print(RTC_voltage);
+
+
+
+      u8g2.setCursor(19, 25);
+      //u8g2.setFont(u8g2_font_crox2hb_tf);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
       u8g2.print(nowweekday);
       u8g2.print(" ");
       if (nowday <= 9) {
@@ -2771,21 +3060,35 @@ if (micvalue < 200) {
         u8g2.print("0");
       }
       u8g2.print(nowmonth);
-      u8g2.print(".");
-      u8g2.print(nowyear);
+
+      //u8g2.print(".");
+      //u8g2.print(nowyear);
 
       u8g2.setFont(u8g2_font_6x10_tf);
+
+      if (WiFi.status() == WL_CONNECTED) {
+
+        u8g2.setCursor(8, 20);
+        u8g2.print("O");
+      }
+
+      if (alarmset == 1) {
+
+        u8g2.setCursor(115, 20);
+        u8g2.print("A");
+      }
+
     }
 
     else if (oledpage == 1) {
 
-      u8g2.setCursor(18, 21);
-      //u8g2.setFont(u8g2_font_helvB10_tf);
-      u8g2.setFont(u8g2_font_crox2hb_tf);
+      u8g2.setCursor(0, 25);
+      //u8g2.setFont(u8g2_font_crox2hb_tf);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
 
       u8g2.print("T:");
       u8g2.print(newtemp, 0);
-      u8g2.print("\xb0"); //degree symbol
+      u8g2.print("\xb0");  //degree symbol
 
 #ifndef Temp_F
       u8g2.print("C");
@@ -2809,7 +3112,7 @@ if (micvalue < 200) {
       u8g2.print(weather_i);
       u8g2.print(" - ");
       u8g2.print(weather_now);
-      u8g2.print("\xb0"); //degree symbol
+      u8g2.print("\xb0");  //degree symbol
       //u8g2.print("C");
 
       //byte weather_max;
@@ -2820,7 +3123,7 @@ if (micvalue < 200) {
       u8g2.setCursor(70, 13);
       u8g2.print("max ");
       u8g2.print(weather_max);
-      u8g2.print("\xb0"); //degree symbol
+      u8g2.print("\xb0");  //degree symbol
 
       u8g2.setDrawColor(1);
       u8g2.drawLine(70, 16, 105, 16);
@@ -2828,78 +3131,184 @@ if (micvalue < 200) {
       u8g2.setCursor(70, 25);
       u8g2.print("min ");
       u8g2.print(weather_min);
-      u8g2.print("\xb0"); //degree symbol
-
-
+      u8g2.print("\xb0");  //degree symbol
     }
 
 
-
-    if (WiFi.status() == WL_CONNECTED) {
-      u8g2.setCursor(8, 20);
-      u8g2.print("O");
-    }
-
-    if (alarmset == 1) {
-      u8g2.setCursor(115, 20);
-      u8g2.print("A");
-    }
-
-    u8g2.setCursor(0, 54);
-    u8g2.print("PAGE: ");
-    u8g2.print(page);
-
-    u8g2.setCursor(0, 64);
-    if (nowhour <= 9) {
-      u8g2.print("0");
-    }
-    u8g2.print(nowhour);
-    u8g2.print(":");
-    if (nowminute <= 9) {
-      u8g2.print("0");
-    }
-    u8g2.print(nowminute);
-    u8g2.print(":");
-    if (nowsecond <= 9) {
-      u8g2.print("0");
-    }
-    u8g2.print(nowsecond);
+    else if (oledpage == 3) {  //radio active
 
 
-    u8g2.setCursor(65, 54);
-    u8g2.print("T:");
-    u8g2.print(newtemp, 0);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(0, 25);
+#ifdef RAD
+      char s[12];
+      radio.formatFrequency(s, sizeof(s));
 
-#ifndef Temp_F
-    u8g2.print(" C");
-#endif
-#ifdef Temp_F
-    u8g2.print(" F");
+      //Serial.print("Station:");
+      //Serial.println(s);
+      u8g2.print(s);
 #endif
 
-#ifdef Si7021sensor
-    u8g2.setCursor(65, 64);
-    u8g2.print("H:");
-    u8g2.print(newhum, 0);
-    u8g2.print(" %");
-#endif
+      u8g2.drawBox(0, 31, soundval, 2);
 
 
+      //radio.debugAudioInfo();
+      //return;
 
-  } while ( u8g2.nextPage() );
+    } else if (oledpage == 5) {  //Set hours
+      u8g2.setFontMode(1);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(0, 25);
+      u8g2.print("Time: ");
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(66, 0, 26, 32);
 
+      if (newhours > 9) {
+        u8g2.print(newhours);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newhours);
+      }
+      u8g2.print(":");
+      if (newminutes > 9) {
+        u8g2.print(newminutes);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newminutes);
+      }
+    }
+
+    else if (oledpage == 6) {  //Set minutes
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(0, 25);
+      u8g2.print("Time: ");
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(98, 0, 26, 32);
+      if (newhours > 9) {
+        u8g2.print(newhours);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newhours);
+      }
+      u8g2.print(":");
+      if (newminutes > 9) {
+        u8g2.print(newminutes);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newminutes);
+      }
+    } else if (oledpage == 7) {  //alarm hours
+      u8g2.setFontMode(1);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(0, 25);
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(65, 0, 26, 32);
+      u8g2.print("Alrm: ");
+      if (newalarmhours > 9) {
+        u8g2.print(newalarmhours);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newalarmhours);
+      }
+      u8g2.print(":");
+      if (newalarmminutes > 9) {
+        u8g2.print(newalarmminutes);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newalarmminutes);
+      }
+    }
+
+
+    else if (oledpage == 8) {  // alarm minutes
+      u8g2.setFontMode(1);
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(96, 0, 26, 32);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(0, 25);
+      u8g2.print("Alrm: ");
+      if (newalarmhours > 9) {
+        u8g2.print(newalarmhours);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newalarmhours);
+      }
+      u8g2.print(":");
+      if (newalarmminutes > 9) {
+        u8g2.print(newalarmminutes);
+      } else {
+        u8g2.print("0");
+        u8g2.print(newalarmminutes);
+      }
+    }
+
+    else if (oledpage == 9) {  //day
+      u8g2.setFontMode(1);
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(0, 0, 26, 32);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(1, 25);
+      if (newday < 10) {
+        u8g2.print("0");
+      }
+      u8g2.print(newday);
+      u8g2.print(".");
+      if (newmonth < 10) {
+        u8g2.print("0");
+      }
+      u8g2.print(newmonth);
+      u8g2.print(".");
+      u8g2.print(newyear);
+    } else if (oledpage == 10) {  //month
+      u8g2.setFontMode(1);
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(30, 0, 26, 32);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(1, 25);
+      if (newday < 10) {
+        u8g2.print("0");
+      }
+      u8g2.print(newday);
+      u8g2.print(".");
+      if (newmonth < 10) {
+        u8g2.print("0");
+      }
+      u8g2.print(newmonth);
+      u8g2.print(".");
+      u8g2.print(newyear);
+    } else if (oledpage == 11) {  //year
+      u8g2.setFontMode(1);
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(61, 0, 50, 32);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setCursor(1, 25);
+      if (newday < 10) {
+        u8g2.print("0");
+      }
+      u8g2.print(newday);
+      u8g2.print(".");
+      if (newmonth < 10) {
+        u8g2.print("0");
+      }
+      u8g2.print(newmonth);
+      u8g2.print(".");
+      u8g2.print(newyear);
+    }
+
+  } while (u8g2.nextPage());
 }
 #endif
 
-void updatetime() {
 
+
+void updatetime() {
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
 
     if (WiFi.status() == WL_CONNECTED) {
-      timeClient.update(); //do this only if online
+      timeClient.update();  //do this only if online
       //timeClient.updateTime();
     }
 
@@ -2917,8 +3326,6 @@ void updatetime() {
 
       Serial.println("ONLINE");
       getNetworkData();
-
-
     }
 
     //timeClient.getHours();
@@ -2930,45 +3337,78 @@ void updatetime() {
     //getYY(), DEC;
 
 
-    Serial.print(F("TIME NOW:"));
-    if (nowhour <= 9) {
-      Serial.print('0');
-    }
-    Serial.print(nowhour);
-    Serial.print(':');
-    if (nowminute <= 9) {
-      Serial.print('0');
-    }
-    Serial.print(nowminute);
-    Serial.print(':');
-    if (nowsecond <= 9) {
-      Serial.print('0');
-    }
-    Serial.println(nowsecond);
+    // Serial.print(F("TIME NOW:"));
+    //  if (nowhour <= 9) {
+    //   Serial.print('0');
+    //  }
+    //  Serial.print(nowhour);
+    //  Serial.print(':');
+    //  if (nowminute <= 9) {
+    //     Serial.print('0');
+    //  }
+    //  Serial.print(nowminute);
+    //  Serial.print(':');
+    //   if (nowsecond <= 9) {
+    //     Serial.print('0');
+    //    }
+    //    Serial.println(nowsecond);
 
-    Serial.print(nowweekday);
-    Serial.print(", ");
-    Serial.print(nowday);
-    Serial.print('.');
-    Serial.print(nowmonth);
-    Serial.print('.');
-    Serial.print(nowyear);
-    Serial.println();
-    Serial.println();
-    Serial.flush();
+    //    Serial.print(nowweekday);
+    //    Serial.print(", ");
+    //   Serial.print(nowday);
+    ///    Serial.print('.');
+    //   Serial.print(nowmonth);
+    //   Serial.print('.');
+    //   Serial.print(nowyear);
+    //   Serial.println();
+    //   Serial.println();
+    //   Serial.flush();
+
+    // Serial.println(popup);
+    //  Serial.println(popcounter);
+    //  Serial.println(poptime);
+
+
+
+
+
+
+
+    //number_hour2 = (newyear / 10) % 10;  //first digit of the year
+    // number_hour1 = (newyear / 100) % 10;  //second digit of the seconds
+    // number_min2 = (newyear / 1000) % 10;  //third digit of the year
+    // number_min1 = (newyear / 10000) % 10;  //last digit of the year
+
+
+    //Serial.print("number_hour2:");
+    // Serial.println(number_hour2);
+    // Serial.print("number_hour1:");
+    // Serial.println(number_hour1);
+
+    //Serial.print("number_min2:");
+    //Serial.println(number_min2);
+    //Serial.print("number_min1:");
+
+    // byte test = (newyear / 10U) % 10;
+    //newyear = nowyear;
+    // byte test = (newyear / 10) % 10;
+
+
+    // Serial.print("newyear:");
+    // Serial.println(newyear);
+
+    //  Serial.print("TEST:");
+    //  Serial.println(test);
+
+
 
 
     //Dot animation
     if (dot == 0) {
       dot = 1;
-    }
-    else {
+    } else {
       dot = 0;
     }
-
-
-
-
   }
 }
 
@@ -2976,8 +3416,8 @@ void updatetime() {
 
 uint16_t getYY() {
   time_t rawtime = timeClient.getEpochTime();
-  struct tm * ti;
-  ti = localtime (&rawtime);
+  struct tm* ti;
+  ti = localtime(&rawtime);
 
   uint16_t year = ti->tm_year + 1900;
   uint16_t yearStr = year;
@@ -2987,8 +3427,8 @@ uint16_t getYY() {
 
 uint8_t getMM() {
   time_t rawtime = timeClient.getEpochTime();
-  struct tm * ti;
-  ti = localtime (&rawtime);
+  struct tm* ti;
+  ti = localtime(&rawtime);
 
   uint8_t month = ti->tm_mon + 1;
   uint8_t monthStr = month < 10 ? 0 + uint8_t(month) : uint8_t(month);
@@ -2997,8 +3437,8 @@ uint8_t getMM() {
 
 uint8_t getDD() {
   time_t rawtime = timeClient.getEpochTime();
-  struct tm * ti;
-  ti = localtime (&rawtime);
+  struct tm* ti;
+  ti = localtime(&rawtime);
 
   uint8_t day = ti->tm_mday;
   uint8_t dayStr = day < 10 ? 0 + uint8_t(day) : uint8_t(day);
@@ -3029,14 +3469,14 @@ void getNetworkData() {
     //int weather_0_id = weather_0["id"]; // 600
     //const char* weather_0_main = weather_0["main"]; // "Snow"
     //const char* weather_0_description = weather_0["description"]; // "light snow"
-    String weather_icon = weather_0["icon"]; // "13n"
+    String weather_icon = weather_0["icon"];  // "13n"
     //const char* base = root["base"]; // "stations"
 
     JsonObject& main = root["main"];
-    float main_temp = main["temp"]; // -1.69
+    float main_temp = main["temp"];  // -1.69
     //float main_feels_like = main["feels_like"]; // -5.6
-    float main_temp_min = main["temp_min"]; // -2.22
-    float main_temp_max = main["temp_max"]; // -1
+    float main_temp_min = main["temp_min"];  // -2.22
+    float main_temp_max = main["temp_max"];  // -1
     //int main_pressure = main["pressure"]; // 998
     //int main_humidity = main["humidity"]; // 86
     //int visibility = root["visibility"]; // 9000
@@ -3048,12 +3488,12 @@ void getNetworkData() {
     JsonObject& sys = root["sys"];
     //int sys_type = sys["type"]; // 1
     //int sys_id = sys["id"]; // 1263
-    const char* sys_country = sys["country"]; // "DE"
+    const char* sys_country = sys["country"];  // "DE"
     //long sys_sunrise = sys["sunrise"]; // 1612163116
     //long sys_sunset = sys["sunset"]; // 1612195309
     //int timezone = root["timezone"]; // 3600
     //long id = root["id"]; // 2911298
-    const char* city = root["name"]; // "Hamburg"
+    const char* city = root["name"];  // "Hamburg"
     //int cod = root["cod"]; // 200
 
     weather_now = round(main_temp);
@@ -3061,33 +3501,24 @@ void getNetworkData() {
     weather_min = round(main_temp_min);
 
     if ((weather_icon == "01d") || (weather_icon == "01n")) {
-      weather_i = 1; //clear sky
-    }
-    else if ((weather_icon == "02d") || (weather_icon == "02n")) {
-      weather_i = 2; //few clouds
-    }
-    else if ((weather_icon == "03d") || (weather_icon == "03n")) {
-      weather_i = 3; //scattered clouds
-    }
-    else if ((weather_icon == "04d") || (weather_icon == "04n")) {
-      weather_i = 4; //broken clouds
-    }
-    else if ((weather_icon == "09d") || (weather_icon == "09n")) {
-      weather_i = 9; //shower rain
-    }
-    else if ((weather_icon == "10d") || (weather_icon == "10n")) {
-      weather_i = 10; //rain
-    }
-    else if ((weather_icon == "11d") || (weather_icon == "11n")) {
-      weather_i = 11; //thunderstorm
-    }
-    else if ((weather_icon == "13d") || (weather_icon == "13n")) {
-      weather_i = 13; //snow
-    }
-    else if ((weather_icon == "50d") || (weather_icon == "50n")) {
-      weather_i = 50; //mist
-    }
-    else {
+      weather_i = 1;  //clear sky
+    } else if ((weather_icon == "02d") || (weather_icon == "02n")) {
+      weather_i = 2;  //few clouds
+    } else if ((weather_icon == "03d") || (weather_icon == "03n")) {
+      weather_i = 3;  //scattered clouds
+    } else if ((weather_icon == "04d") || (weather_icon == "04n")) {
+      weather_i = 4;  //broken clouds
+    } else if ((weather_icon == "09d") || (weather_icon == "09n")) {
+      weather_i = 9;  //shower rain
+    } else if ((weather_icon == "10d") || (weather_icon == "10n")) {
+      weather_i = 10;  //rain
+    } else if ((weather_icon == "11d") || (weather_icon == "11n")) {
+      weather_i = 11;  //thunderstorm
+    } else if ((weather_icon == "13d") || (weather_icon == "13n")) {
+      weather_i = 13;  //snow
+    } else if ((weather_icon == "50d") || (weather_icon == "50n")) {
+      weather_i = 50;  //mist
+    } else {
       weather_i = 0;
     }
 
@@ -3112,7 +3543,7 @@ void getNetworkData() {
 
 
     //timeclient data
-    long val = UTCoffset * 3600;
+    long val = (UTCoffset + summertime) * 3600;
     timeClient.setTimeOffset(val);
 
     Serial.print("Network time: ");
@@ -3136,19 +3567,17 @@ void getNetworkData() {
       //set the clock
       Serial.println("Time difference detected - syncing RTC");
       rtc.adjust(DateTime(getYY(), getMM(), getDD(), timeClient.getHours(), timeClient.getMinutes(), timeClient.getSeconds()));
-      //DateTime now = rtc.now();
+      DateTime now = rtc.now();
     }
-    updateflag = 0; //set update to zero
-  }
-  else {
+    updateflag = 0;  //set update to zero
+  } else {
 
     if (millis() - timeSinceLastWUpdate > (1000L * UPDATE_INTERVAL_SECS)) {
 
-      updateflag = 1; //toggle the update
+      updateflag = 1;  //toggle the update
 
       timeSinceLastWUpdate = millis();
     }
-
   }
 
 
@@ -3164,6 +3593,7 @@ String httpGETRequest(const char* serverName) {
 
   // Your IP address with path or Domain name with URL path
   http.begin(serverName);
+  //http.begin("http://192.168.1.106:1880/get-sensor");
 
   // Send HTTP POST request
   int httpResponseCode = http.GET();
@@ -3174,8 +3604,7 @@ String httpGETRequest(const char* serverName) {
     //Serial.print("HTTP Response code: ");
     //Serial.println(httpResponseCode);
     payload = http.getString();
-  }
-  else {
+  } else {
     Serial.print("Error code: ");
     Serial.println(httpResponseCode);
   }

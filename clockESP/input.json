@@ -12,7 +12,7 @@
 "a_type": 1,
 "a_sc": 1,
 "vol": 255,
-"radio": 1,
+"radiostate": 1,
 "act_mhz": 10360,
 "f1_mhz": 10360,
 "f1_mhz": "Radio Niedersachsen",
@@ -50,7 +50,7 @@ int a_type = root["a_type"]; // 1
 int a_sc = root["a_sc"]; // 1
 int vol = root["vol"]; // 255
 int br = root["br"]; // 11
-int radio = root["radio"]; // 1
+int radiostate = root["radiostate"]; // 1
 int act_mhz = root["act_mhz"]; // 10360
 int f1_mhz = root["f1_mhz"]; // 10360
 const char* f1_name = root["f1_name"]; // "Radio Niedersachsen"
@@ -86,7 +86,7 @@ root["a_type"] = 1;
 root["a_sc"] = 1;
 root["vol"] = 255;
 root["br"] = 11;
-root["radio"] = 1;
+root["radiostate"] = 1;
 root["act_mhz"] = 10360;
 root["f1_mhz"] = 10360;
 root["f1_name"] = "Radio Niedersachsen";
