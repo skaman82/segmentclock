@@ -2561,17 +2561,12 @@ while (menu == 1) {
         alarmminutes = newalarmminutes;
       }
 
+      Serial.println("exit menu");
       menustep = 0;
       menu = 0;
       oledpage = 0;
-      Serial.print("Exit Menu");
       break;
   }
-
-    if (menu == 0) {
-      break;
-    }
-
    
   }
    //yield();
