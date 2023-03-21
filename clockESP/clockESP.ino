@@ -146,7 +146,7 @@
 #define IR            //TODO: IR Remot control via i2c using an ATtiny845
 #define RAD           //TODO: RADIO MODULE - Requres OLED & IRCONTROL option
 //#define AudioSensor     //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
-//#define Buzzer
+#define Buzzer
 //==================================================================================================================
 
 #define RTCtemp
@@ -869,6 +869,9 @@ void runserver() {
 
 
 
+
+
+
 //BUTTON READING
 //==================================================================================================================
 byte buttoncheck() {
@@ -947,13 +950,14 @@ byte buttoncheck() {
 
 
 
-//MAIN LOOP
+//ATTINY DATA
 //==================================================================================================================
-void loop() {
 
-  buttoncheck();  //ckecks button interaction
 
-  Wire.requestFrom(0x08, 8);  // request 8 bytes from slave device #8
+void attinydata() {
+
+
+Wire.requestFrom(0x08, 8);  // request 8 bytes from slave device #8
   int i = 0;                  //counter for each byte as it arrives
   while (Wire.available()) {
     wireArray[i] = Wire.read();  // every character that arrives it put in order in the empty array "t"
@@ -972,25 +976,7 @@ void loop() {
   RTC_voltage = adcvalue1 * (3.3 / 1023);  //measured supply after the diode, also meaning max voltage level
 
 
-  // Serial.print("adcvalue1: ");
-  //Serial.println(adcvalue2);   //shows the data in the array t
-  //Serial.print("RTC_voltage: ");
-  //Serial.println(RTC_voltage);   //shows the data in the array t
-  // Serial.print("IR BUTTON: ");
-  // Serial.println(val4, HEX);  //shows the data in the array t
-  // Serial.print("Volume:");
-  // Serial.print(volume);  //shows the data in the array t
-  // Serial.println();
-  //Serial.println(nowday);
-  // Serial.print(".");
-  // Serial.println(nowmonth);
-  //  Serial.print(".");
-  // Serial.println(nowyear);
-
-
-
-
-// IR buttons ------------------------------
+  // IR buttons ------------------------------
 
   //mapping IR buttons
   // 5 = Up
@@ -1001,9 +987,26 @@ void loop() {
   // 2 = Play/Pause
   // 1 = Menu
 
+
+
+// MENU CALL
+
+ if (val4 == 1) {
+   if ((menu == 0) && (radiostate == 0) && (popup == 0)) {
+      stepcounter = 0;
+      menu = 1;
+      settime();
+   }
+   else {
+    stepcounter = 0;
+     menu = 0;
+   }
+ }
+
+
   //Radio Control
   if (val4 == 2) {
-    if (radiostate == 0) {
+    if ((radiostate == 0) && (menu == 0)) {
       radiostate = 1;
       oledpage = 3; // Radio Display
 
@@ -1020,7 +1023,7 @@ if (val4 == 6) {          //Right button
     #ifdef RAD
       radio.seekUp(true);
       #endif
-    } else if (radiostate == 0) {  // controlls brightness while radio is off
+    } else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off
       if (colorset > 0) {
       colorset--;
     } else {
@@ -1034,7 +1037,7 @@ if (val4 == 6) {          //Right button
     #ifdef RAD
       radio.seekDown(true);
       #endif
-    } else if (radiostate == 0) {  // controlls brightness while radio is off
+    } else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off
       if (colorset < 8) {
       colorset++;
     } else {
@@ -1089,6 +1092,38 @@ if (val4 == 6) {          //Right button
   }
 
 
+}
+
+
+
+
+
+
+//MAIN LOOP
+//==================================================================================================================
+void loop() {
+
+  buttoncheck();  //checks hardware button interaction
+  attinydata();  //checks IR interaction and ADC Values for RTC health and MIC values
+
+  
+  // Serial.print("adcvalue1: ");
+  //Serial.println(adcvalue2);   //shows the data in the array t
+  //Serial.print("RTC_voltage: ");
+  //Serial.println(RTC_voltage);   //shows the data in the array t
+  // Serial.print("IR BUTTON: ");
+  // Serial.println(val4, HEX);  //shows the data in the array t
+  // Serial.print("Volume:");
+  // Serial.print(volume);  //shows the data in the array t
+  // Serial.println();
+  //Serial.println(nowday);
+  // Serial.print(".");
+  // Serial.println(nowmonth);
+  //  Serial.print(".");
+  // Serial.println(nowyear);
+
+
+
 //------------------------------
 
   static int pattern = 0, lastReading;
@@ -1135,6 +1170,7 @@ if (val4 == 6) {          //Right button
  // WIFI BUTTON AND STATUS ------------------------------
 
   if (pressedbut == 7) {
+//FIXME > when user turns on wifi it is stuck in AP mode until it can connect - no way back to offline mode until wifi settings are put in
 
     if (wifion == 0) {
       wifion = 1;
@@ -1198,17 +1234,17 @@ if (val4 == 6) {          //Right button
     if (pressedbut == 3) {
       stepcounter = 0;  //reset slide animation steps
 
-#ifdef Si7021sensor  //add humidity page
+    #ifdef Si7021sensor  //add humidity page
       if (page < 2) {
         page = page + 1;
       }
-#endif
+    #endif
 
-#ifdef RTCtemp
+    #ifdef RTCtemp
       if (page < 1) {
         page = page + 1;
       }
-#endif
+    #endif
 
       else {
         page = 0;
@@ -1218,7 +1254,7 @@ if (val4 == 6) {          //Right button
     }
 
     //CENTER BUTTON
-    if ((menu == 0) && (popup == 0)) {
+    if ((menu == 0) && (warningcode == 0)) {
       if (pressedbut == 2) {
         if (alarmstate == 0) {
           if (alarmset == 0) {
@@ -1235,10 +1271,11 @@ if (val4 == 6) {          //Right button
 
     //CENTER BUTTON LONG
     if (pressedbut == 5) {
+      if (menu == 0) {
       stepcounter = 0;
-      //get current time and alarm-setting for the setting menu
       menu = 1;
       settime();
+      }
     }
   }
 
@@ -1316,7 +1353,7 @@ if (val4 == 6) {          //Right button
 
   looptime++;
 
-  if (looptime > 50) {  //delaying the reading
+  if (looptime >= 150) {  //delaying the reading
     #ifdef IR  //ATTINY required
     // measurung requires abaout 1s AFTER startup to ensure correct voltage reading
 
@@ -2177,22 +2214,19 @@ void settime() {
 
   Serial.println("entered menu");
 
-
 while (menu == 1) {
     buttoncheck();
-    
-#ifdef OLED
-    //OLEDdraw();
-#endif
+    attinydata();
     
 
- // Color definitions ------------------------------
+    
+
+ // Color setup ------------------------------
 
     uint32_t off = pixels.Color(0, 0, 0); 
     uint32_t white = pixels.Color(255, 255, 255);
     uint32_t red = pixels.Color(255, 0, 0);
     uint32_t green = pixels.Color(0, 255, 0);
-
 
  // Time set routine ------------------------------
 
@@ -2441,7 +2475,9 @@ while (menu == 1) {
       number_hour1 = (newyear / 1000);
     }
 
-
+  #ifdef OLED
+    PopUphandler();
+  #endif
     mapPixels();
     setbrightness();
     pixels.show();
@@ -2472,6 +2508,11 @@ if (pressedbut == 5) {
         Serial.print(":");
         Serial.println(newminutes);
       }
+      else {
+      menustep = 0;
+      menu = 0;
+      Serial.print("Exit Menu");
+      }
 
       if ((newalarmhours != alarmhours) || (newalarmminutes != alarmminutes)) {  //check if something was actually changed
 
@@ -2493,18 +2534,19 @@ if (pressedbut == 5) {
         alarmhours = newalarmhours;
         alarmminutes = newalarmminutes;
       }
-
+      else {
       menustep = 0;
       menu = 0;
-      page = 0;
-
       Serial.print("Exit Menu");
+      }
+
+      
     }
 
-    OLEDdraw();
-    yield();
+    
     
   }
+  yield();
   
 }
 
@@ -2682,6 +2724,7 @@ void PopUphandler() {
     if (wifion == 1) {
       updateflag = 1;
     }
+    poptime = 2000;  //longer warning value
     popup = 1;
     Serial.print("WiFi state change detected:");
     Serial.println(wifion);
@@ -2766,14 +2809,17 @@ void alarmpopup() {
   u8g2.firstPage();
   do {
     if (popup == 1) {
-      //u8g2.setFont(u8g2_font_6x10_tf);
+      byte width = u8g2.getDisplayWidth();
       u8g2.setFont(u8g2_font_logisoso18_tf);
-      u8g2.setCursor(0, 24);
-      u8g2.print("ALARM: ");
+      
       if (alarmset == 1) {
-        u8g2.print("ON");
+        byte pos = ((width - (u8g2.getUTF8Width("ALARM ON"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
+        u8g2.print("ALARM ON");
       } else {
-        u8g2.print("OFF");
+        byte pos = ((width - (u8g2.getUTF8Width("ALARM OFF"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
+        u8g2.print("ALARM OFF");
       }
     }
 
@@ -2790,16 +2836,24 @@ void wifipopup() {
   do {
 
     if (popup == 1) {
-      u8g2.setFont(u8g2_font_6x10_tf);
-      u8g2.setCursor(0, 21);
-
+      //u8g2.setFont(u8g2_font_6x10_tf);
+      //u8g2.setCursor(0, 21);
+      u8g2.setFont(u8g2_font_logisoso18_tf);
+      byte width = u8g2.getDisplayWidth();
+      
       if (wifion == 0) {
-        u8g2.print("WIFI: OFF");
+        byte pos = ((width - (u8g2.getUTF8Width("WiFi: OFF"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
+        u8g2.print("WiFi: OFF");
       } else {
-        u8g2.print("WIFI CONNECTED");
-        u8g2.setCursor(0, 33);
-        u8g2.print("IP: ");
-        u8g2.print(WiFi.localIP());
+        byte pos = ((width - (u8g2.getUTF8Width("ONLINE"))) / 2);  //calculate the text lenght
+        u8g2.setCursor(pos, 25);
+        u8g2.print("ONLINE");
+
+        //u8g2.setFont(u8g2_font_6x10_tf);
+        //u8g2.setCursor(0, 32);
+        //u8g2.print("IP: ");
+        //u8g2.print(WiFi.localIP());
       }
     }
 
@@ -2822,11 +2876,11 @@ void colorpopup() {
       if (colorset == 0) {
         byte pos = ((width - (u8g2.getUTF8Width("Rainbow 2"))) / 2);  //calculate the text lenght
         u8g2.setCursor(pos, 25);
-        u8g2.print("Rainbow 1");
+        u8g2.print("Rainbow 2");
       } else if (colorset == 1) {
         byte pos = ((width - (u8g2.getUTF8Width("Rainbow"))) / 2);  //calculate the text lenght
         u8g2.setCursor(pos, 25);
-        u8g2.print("Rainbow 2");
+        u8g2.print("Rainbow");
       } else if (colorset == 2) {
         byte pos = ((width - (u8g2.getUTF8Width("CyberPunk"))) / 2);  //calculate the text lenght
         u8g2.setCursor(pos, 25);
@@ -2936,9 +2990,12 @@ void volumepopup() {
   do {
 
     if (popup == 1) {
-      u8g2.setFont(u8g2_font_6x10_tf);
+      //u8g2.setFont(u8g2_font_6x10_tf);
       u8g2.setFont(u8g2_font_logisoso18_tf);
-      u8g2.setCursor(0, 25);
+      byte width = u8g2.getDisplayWidth();
+      byte pos = ((width - (u8g2.getUTF8Width("VOLUME:00"))) / 2);  //calculate the text lenght
+      u8g2.setCursor(pos, 25);
+      //u8g2.setCursor(0, 25);
       u8g2.print("VOLUME:");
       byte displ_vol = map(volume, 0, 40, 100, 0);
       //byte vol_bar = map(displ_vol, 0, 40, 0, 100);
@@ -3019,9 +3076,17 @@ void OLEDdraw() {
     u8g2.print("popup:");
     u8g2.print(popup);
 
+    u8g2.setCursor(50, 40);
+    u8g2.print("loop:");
+    u8g2.print(looptime);
+
     u8g2.setCursor(0, 50);
     u8g2.print("menu:");
     u8g2.print(menu);
+
+     u8g2.setCursor(50, 50);
+    u8g2.print("step:");
+    u8g2.print(menustep);
 
 
 
@@ -3047,14 +3112,13 @@ void OLEDdraw() {
       u8g2.setFont(u8g2_font_6x10_tf);
 
       if (WiFi.status() == WL_CONNECTED) {
-
-        u8g2.setCursor(8, 20);
+        u8g2.setCursor(0, 20);
         u8g2.print("O");
       }
 
       if (alarmset == 1) {
 
-        u8g2.setCursor(115, 20);
+        u8g2.setCursor(118, 20);
         u8g2.print("A");
       }    
     }
