@@ -177,11 +177,12 @@ RDA5807M radio;  // Create an instance of Class for RDA5807M Chip
 
 //==================================================================================================================
 
-//#define Temp_F              //Teperature will be converted from C to F
+#define lang_DE              //Geman weekdays
+//#define Temp_F               //Teperature will be converted from C to F
 float tempoffset = -2.0;     //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
 float humidityoffset = 0.0;  //+1 Humidity adjustment (positive or negative value) only with Si7021 sensor
-int UTCoffset = +1;          //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync
-int summertime = 1;
+int UTCoffset = +0;          //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync
+int summertime = 1;          //todo
 //==================================================================================================================
 //USER CONFIG END
 //==================================================================================================================
@@ -293,7 +294,12 @@ byte radiostate = 0;   //determines if radio is on or off
 byte warningcode = 0;  //warning code for warning popup
 byte dismissed = 0;    //if 1 warning was dismissed and is not appearing again (only for the RTC Bat check as it checks bat regullary)
 
+#ifdef lang_DE
 char daysOfTheWeek[7][12] = { "SO", "MO", "DI", "MI", "DO", "FR", "SA" };
+#endif
+#ifndef lang_DE
+char daysOfTheWeek[7][12] = { "SU", "MO", "TU", "WE", "TH", "FR", "SA" };
+#endif
 
 byte alarmset = 0;
 byte old_alarmset;
@@ -991,15 +997,12 @@ Wire.requestFrom(0x08, 8);  // request 8 bytes from slave device #8
 
 // MENU CALL
 
- if (val4 == 1) {
+ if (val4 == 1) { //center
    if ((menu == 0) && (radiostate == 0) && (popup == 0)) {
-      stepcounter = 0;
-      menu = 1;
-      settime();
+      pressedbut = 5; //act as longpress center hardware button
    }
    else {
-    stepcounter = 0;
-     menu = 0;
+    pressedbut = 5; //act as longpress center hardware button
    }
  }
 
@@ -1610,6 +1613,11 @@ void mapPixels() {
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
   }
+  else if (number_min2 == 16) {  //"F" code
+    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6, pixels.Color(0, 0, 0));
+  }
 
 
 
@@ -1672,6 +1680,11 @@ void mapPixels() {
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
+  }
+  else if (number_min1 == 16) {  //"F" code
+    pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
   }
 
@@ -1847,7 +1860,7 @@ void setbrightness() {
     } else if (lightvalue > 1000) {  //value for bright
       lightvalue = 1000;
     }
-    lightvalue = map(lightvalue, 20, 1000, 10, 255);
+    lightvalue = map(lightvalue, 20, 1000, 40, 255);
     pixels.setBrightness(lightvalue);  //regulates the brightness of the whole strip
 
     #ifdef OLED
@@ -2073,8 +2086,13 @@ void showtemp() {
     if (digittemp == 0) {
       number_hour1 = 15;  //dash
       number_hour2 = 15;  //dash
-      number_min1 = 13;   //code for c
-      number_min2 = 11;   //code for "°"
+      number_min1 = 13;   //code for "°"
+      #ifndef Temp_F
+      number_min2 = 11;   //code for c 
+      #endif
+      #ifdef Temp_F
+      number_min2 = 16;   //code for F 
+      #endif
 
       //Serial.println("No avg. data yet, waiting…");
 
@@ -2128,8 +2146,14 @@ void showtemp() {
         //4th step
         number_hour1 = (digittemp / 100U) % 10;  //first digit of temp
         number_hour2 = (digittemp / 10U) % 10;   //second digit of temp
-        number_min1 = 13;                        //code for c
-        number_min2 = 11;                        //code for "°"
+        //FIXME needs F digit if temp is test to F
+        #ifndef Temp_F
+          number_min2 = 11;                        //code for "c"
+        #endif
+        #ifdef Temp_F
+          number_min2 = 16;                        //code for "f"
+         #endif
+        number_min1 = 13;                       //code for "°"
       }
     }
   }
@@ -2203,6 +2227,8 @@ void showhumidity() {
 
 //SET TIME FUNCTION
 //==================================================================================================================
+
+//FIXME 
 void settime() {
   newhours = nowhour;
   newminutes = nowminute;
@@ -2217,8 +2243,7 @@ void settime() {
 while (menu == 1) {
     buttoncheck();
     attinydata();
-    
-
+    //delay(50);
     
 
  // Color setup ------------------------------
@@ -2228,7 +2253,89 @@ while (menu == 1) {
     uint32_t red = pixels.Color(255, 0, 0);
     uint32_t green = pixels.Color(0, 255, 0);
 
- // Time set routine ------------------------------
+ 
+// DISPLAYING VALUES TO THE LED DIGITS  ------------------------------
+
+
+    if ((menustep == 0) || (menustep == 1)) {
+      //display time digits
+      pixels.fill(white, 0, 29);
+
+      number_hour2 = (newhours % 10);  //last digit of the seconds
+      if (newhours < 10) {
+        number_hour1 = 0;
+      } else {
+        number_hour1 = (newhours / 10U) % 10;  //first digit of the seconds
+      }
+
+      number_min2 = (newminutes % 10);  //last digit of the seconds
+      if (newminutes < 10) {
+        number_min1 = 0;
+      } else {
+        number_min1 = (newminutes / 10U) % 10;  //first digit of the seconds
+      }
+    }
+
+    else if ((menustep == 2) || (menustep == 3)) {
+      //display alarm digits
+      pixels.fill(red, 0, 29);
+
+      number_hour2 = (newalarmhours % 10);  //last digit of the seconds
+      if (newalarmhours < 10) {
+        number_hour1 = 0;
+      } else {
+        number_hour1 = (newalarmhours / 10U) % 10;  //first digit of the seconds
+      }
+
+      number_min2 = (newalarmminutes % 10);  //last digit of the seconds
+      if (newalarmminutes < 10) {
+        number_min1 = 0;
+      } else {
+        number_min1 = (newalarmminutes / 10U) % 10;  //first digit of the seconds
+      }
+    }
+
+
+    else if ((menustep == 4) || (menustep == 5)) {
+      //display alarm digits
+      pixels.fill(green, 0, 29);
+
+      number_hour2 = (newday % 10);  //last digit of the seconds
+      if (newday < 10) {
+        number_hour1 = 0;
+      } else {
+        number_hour1 = (newday / 10U) % 10;  //first digit of the seconds
+      }
+
+      number_min2 = (newmonth % 10);  //last digit of the seconds
+      if (newmonth < 10) {
+        number_min1 = 0;
+      } else {
+        number_min1 = (newmonth / 10U) % 10;  //first digit of the seconds
+      }
+
+    }
+
+    else if (menustep == 6) {
+      //display alarm digits
+      pixels.fill(green, 0, 13);
+      pixels.fill(green, 14, 29);
+      pixels.fill(off, 28, 29);  // dots are off
+
+      Serial.print("newyear >:");
+      Serial.println(newhours);
+
+      number_min2 = (newyear % 10);
+      number_min1 = ((newyear / 10U) % 10);
+      number_hour2 = ((newyear / 100) % 10);
+      number_hour1 = (newyear / 1000);
+    }
+
+ 
+
+
+
+// Time set routine ------------------------------
 
     if (menustep == 0) { //edit hours
       pixels.fill(off, 0, 14);   //off minutes
@@ -2397,97 +2504,21 @@ while (menu == 1) {
 
 
 
-
-// DISPLAYING VALUES TO THE LED DIGITS  ------------------------------
-
-
-    if ((menustep == 0) || (menustep == 1)) {
-      //display time digits
-      pixels.fill(white, 0, 29);
-
-      number_hour2 = (newhours % 10);  //last digit of the seconds
-      if (newhours < 10) {
-        number_hour1 = 0;
-      } else {
-        number_hour1 = (newhours / 10U) % 10;  //first digit of the seconds
-      }
-
-      number_min2 = (newminutes % 10);  //last digit of the seconds
-      if (newminutes < 10) {
-        number_min1 = 0;
-      } else {
-        number_min1 = (newminutes / 10U) % 10;  //first digit of the seconds
-      }
-    }
-
-    else if ((menustep == 2) || (menustep == 3)) {
-      //display alarm digits
-      pixels.fill(red, 0, 29);
-
-      number_hour2 = (newalarmhours % 10);  //last digit of the seconds
-      if (newalarmhours < 10) {
-        number_hour1 = 0;
-      } else {
-        number_hour1 = (newalarmhours / 10U) % 10;  //first digit of the seconds
-      }
-
-      number_min2 = (newalarmminutes % 10);  //last digit of the seconds
-      if (newalarmminutes < 10) {
-        number_min1 = 0;
-      } else {
-        number_min1 = (newalarmminutes / 10U) % 10;  //first digit of the seconds
-      }
-    }
-
-
-    else if ((menustep == 4) || (menustep == 5)) {
-      //display alarm digits
-      pixels.fill(green, 0, 29);
-
-      number_hour2 = (newday % 10);  //last digit of the seconds
-      if (newday < 10) {
-        number_hour1 = 0;
-      } else {
-        number_hour1 = (newday / 10U) % 10;  //first digit of the seconds
-      }
-
-      number_min2 = (newmonth % 10);  //last digit of the seconds
-      if (newmonth < 10) {
-        number_min1 = 0;
-      } else {
-        number_min1 = (newmonth / 10U) % 10;  //first digit of the seconds
-      }
-
-    }
-
-    else if (menustep == 6) {
-      //display alarm digits
-      pixels.fill(green, 0, 13);
-      pixels.fill(green, 14, 29);
-      pixels.fill(off, 28, 29);  // dots are off
-
-      Serial.print("newyear >:");
-      Serial.println(newhours);
-
-      number_min2 = (newyear % 10);
-      number_min1 = ((newyear / 10U) % 10);
-      number_hour2 = ((newyear / 100) % 10);
-      number_hour1 = (newyear / 1000);
-    }
-
-  #ifdef OLED
+ #ifdef OLED
     PopUphandler();
   #endif
+
     mapPixels();
     setbrightness();
     pixels.show();
-
+    delay(10);
 
     
   // Saving settings to EEPROM an leaving  ------------------------------
 
 
-if (pressedbut == 5) {
+
+  if (pressedbut == 5) {
       
       if ((newhours != nowhour) || (newminutes != nowminute) || (newday != nowday) || (newmonth != nowmonth) || (newyear != nowyear)) {  //check if something was actually changed
 
@@ -2507,11 +2538,6 @@ if (pressedbut == 5) {
         Serial.print(newhours);
         Serial.print(":");
         Serial.println(newminutes);
-      }
-      else {
-      menustep = 0;
-      menu = 0;
-      Serial.print("Exit Menu");
       }
 
       if ((newalarmhours != alarmhours) || (newalarmminutes != alarmminutes)) {  //check if something was actually changed
@@ -2534,20 +2560,21 @@ if (pressedbut == 5) {
         alarmhours = newalarmhours;
         alarmminutes = newalarmminutes;
       }
-      else {
+
       menustep = 0;
       menu = 0;
+      oledpage = 0;
       Serial.print("Exit Menu");
-      }
+      break;
+  }
 
-      
+    if (menu == 0) {
+      break;
     }
 
-    
-    
+   
   }
-  yield();
-  
+   //yield();
 }
 
 
