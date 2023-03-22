@@ -3174,8 +3174,8 @@ void OLEDdraw() {
 
     if (oledpage == 0) {
 
-      u8g2.drawXBMP(10,6,20,20, cal_bmp);
-      u8g2.setCursor(35, 25);
+      u8g2.drawXBMP(0,6,20,20, cal_bmp);
+      u8g2.setCursor(25, 25);
       u8g2.setFont(u8g2_font_logisoso18_tf);
       u8g2.print(nowweekday);
       u8g2.print(",");
@@ -3192,13 +3192,13 @@ void OLEDdraw() {
       u8g2.setFont(u8g2_font_6x10_tf);
 
       if (WiFi.status() == WL_CONNECTED) {
-        u8g2.drawXBMP(0,11,10,10, online_bmp); 
+        u8g2.drawXBMP(116,17,10,10, online_bmp); 
         //u8g2.setCursor(0, 20);
         //u8g2.print("O");
       }
 
       if (alarmset == 1) {
-        u8g2.drawXBMP(116,11,10,10, alarm_bmp); 
+        u8g2.drawXBMP(116,5,10,10, alarm_bmp); 
         //u8g2.setCursor(118, 20);
         //u8g2.print("A");
       }    
