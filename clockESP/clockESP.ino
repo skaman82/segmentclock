@@ -186,7 +186,7 @@ RDA5807M radio;  // Create an instance of Class for RDA5807M Chip
 
 #define lang_DE              //Geman weekdays
 //#define Temp_F               //Teperature will be converted from C to F
-float tempoffset = -2.0;     //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
+float tempoffset = -1.0;     //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
 float humidityoffset = 0.0;  //+1 Humidity adjustment (positive or negative value) only with Si7021 sensor
 int UTCoffset = +0;          //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync
 int summertime = 1;          //todo
@@ -958,7 +958,10 @@ myBut_wifi.update();
 attinydata(); // FIXME integrate IR
 
 
-if (myBut_up.isSingleClick()) {
+
+
+
+if (myBut_up.isClick()) {
   #ifdef Buzzer
       tone(buzzer, 100, 50);
     #endif
@@ -972,7 +975,7 @@ else if (myBut_up.isLongClick()) {
     Serial.println("up long pressed");
     buttonz = 4;  //Up long pressed
 }
-if (myBut_center.isSingleClick()) {
+if (myBut_center.isClick()) {
   #ifdef Buzzer
       tone(buzzer, 100, 50);
     #endif
@@ -986,7 +989,7 @@ else if (myBut_center.isLongClick()) {
     Serial.println("set long pressed");
     buttonz = 5;  //SetUp long pressed
 }
-if (myBut_down.isSingleClick()) {
+if (myBut_down.isClick()) {
   #ifdef Buzzer
       tone(buzzer, 100, 50);
     #endif
