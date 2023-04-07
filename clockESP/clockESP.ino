@@ -1,18 +1,25 @@
+char version[] = "0.6";
+
 // TO DO
 
+// x RTC Bat check (basic warning system)
 // Brightness Setting popup & menu
 // Digit animation setting menu
 // Pageslide animation setting menu
-// IR Remote Menu access
-// x RTC Bat check (basic warning system)
-// add summertime option
+//0.7
 
+// IR Remote Menu access
+// add summertime option
+// 0.8
 
 
 // OLED Graphics UI
 // OLED Graphics Forecast
-// TBD: Radio UI + FAV management (IR Only)
+// 0.9
 
+// TBD: Radio UI + FAV management (IR Only)
+// port to FAST LED
+//1.0
 
 
 // finalise radio PCBs
@@ -32,7 +39,7 @@
 //  ArduinoJson by Benoit Blanchon 5.13.2
 
 //  Ticker  //https://github.com/esp8266/Arduino/tree/master/libraries/Ticker
-
+//  Multibutton 1.2.0: https://github.com/poelstra/arduino-multi-button/releases
 
 
 
@@ -48,7 +55,7 @@
 //======================
 //   add summertime option
 //    port to fastLED to remove flickering
-//    finish digit animation setting (
+//    finish digit animation setting 
 //    finish pageslide setting
 //    create a menu: m01 > set time and alarm; m02 > set pageslide on/ff; m02 > set digit animation; m03 > set brightness; m04 > mic on/off
 //    make brightness manually adjustable as a setting (1-10 manual, 0 Auto)
@@ -225,6 +232,11 @@ U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/SCL, /* data=*/S
 #endif
 
 
+#include <PinButton.h> //button management
+PinButton myBut_up(bt_up);
+PinButton myBut_down(bt_dwn);
+PinButton myBut_center(bt_set);
+PinButton myBut_wifi(bt_wifi);
 
 byte wireArray[8] = {};  //empty array where to put the numbers comming from the slave
 int micvalue = 0;
@@ -730,9 +742,10 @@ void setup() {
 
   if (rtc.lostPower()) {
     Serial.println("WARNING: RTC lost Power");
-    warningcode = 3; 
-    // this will adjust to the date and time at compilation
-    // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+   // warningcode = 3; //romoving warningcode as rtc volatage alarm will be enough
+
+   // this will adjust to the date and time at compilation
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
 
   //we don't need the 32K Pin, so disable it
@@ -930,83 +943,88 @@ void runserver() {
 
 
 
-
-
-
-
 //BUTTON READING
 //==================================================================================================================
-byte buttoncheck() {
-  int i_butt = 0;
-  byte buttonz = 0;
-  if (digitalRead(bt_up) != 1) {
-    while (digitalRead(bt_up) != 1) {
-      delay(2);
-      i_butt++;
-    }
-    #ifdef Buzzer
+
+byte newbuttons() {
+
+byte buttonz = 0;
+
+myBut_up.update();
+myBut_down.update();
+myBut_center.update();
+myBut_wifi.update();
+
+attinydata(); // FIXME integrate IR
+
+
+if (myBut_up.isSingleClick()) {
+  #ifdef Buzzer
       tone(buzzer, 100, 50);
     #endif
+    Serial.println("up pressed");
     buttonz = 1;  //Up pressed
-
-    if (i_butt > (longpresstime)) {
-    #ifdef Buzzer
+}
+else if (myBut_up.isLongClick()) {
+  #ifdef Buzzer
       tone(buzzer, 100, 500);
     #endif
-      buttonz = 4;  //Button up pressed long
-      delay(2);
-    }
-  }
-
-  else if (digitalRead(bt_set) != 1) {
-    while (digitalRead(bt_set) != 1) {
-      delay(2);
-      i_butt++;
-    }
-    buttonz = 2;  //Center pressed
-      #ifdef Buzzer
-        tone(buzzer, 100, 50);
-      #endif
-
-    if (i_butt > (longpresstime)) {
-      buttonz = 5;  //Button center pressed long
-      #ifdef Buzzer
-        tone(buzzer, 100, 500);
-      #endif
-      delay(2);
-    }
-
-  } else if (digitalRead(bt_dwn) != 1) {
-    while (digitalRead(bt_dwn) != 1) {
-      delay(2);
-      i_butt++;
-    }
-    buttonz = 3;  //Down pressed
-    #ifdef Buzzer
-      tone(buzzer, 100, 50);
-    #endif
-
-    if (i_butt > (longpresstime)) {
-      buttonz = 6;  //Button down pressed long
-      #ifdef Buzzer
-        tone(buzzer, 100, 500);
-      #endif
-      delay(2);
-    }
-  } else if (digitalRead(bt_wifi) != 1) {
-    while (digitalRead(bt_wifi) != 1) {
-      delay(2);
-      i_butt++;
-    }
-    buttonz = 7;  //Wifi Button pressed
-    #ifdef Buzzer
-      tone(buzzer, 100, 50);
-    #endif
-  }
-
-  pressedbut = buttonz;
-  return buttonz;
+    Serial.println("up long pressed");
+    buttonz = 4;  //Up long pressed
 }
+if (myBut_center.isSingleClick()) {
+  #ifdef Buzzer
+      tone(buzzer, 100, 50);
+    #endif
+    Serial.println("set pressed");
+    buttonz = 2;  //Set pressed
+}
+else if (myBut_center.isLongClick()) {
+  #ifdef Buzzer
+      tone(buzzer, 100, 500);
+    #endif
+    Serial.println("set long pressed");
+    buttonz = 5;  //SetUp long pressed
+}
+if (myBut_down.isSingleClick()) {
+  #ifdef Buzzer
+      tone(buzzer, 100, 50);
+    #endif
+    Serial.println("down pressed");
+    buttonz = 3;  //Down pressed
+}
+else if (myBut_down.isLongClick()) {
+  #ifdef Buzzer
+      tone(buzzer, 100, 500);
+    #endif
+    Serial.println("down long pressed");
+    buttonz = 6;  //Down long pressed
+}
+
+if (myBut_wifi.isSingleClick()) {
+  #ifdef Buzzer
+      tone(buzzer, 100, 50);
+    #endif
+    Serial.println("wifi pressed");
+    buttonz = 7;  //Down pressed
+}
+
+  if ((myBut_up.isLongClick()) && (myBut_down.isLongClick())){ //VESION MENU COMBO
+  #ifdef Buzzer
+      tone(buzzer, 100, 500);
+    #endif
+    Serial.println("left+right clicked short");
+    buttonz = 8;
+  }
+
+pressedbut = buttonz;
+return buttonz;
+}
+
+
+
+
+
 
 
 
@@ -1162,7 +1180,12 @@ if (val4 == 6) {          //Right button
 //==================================================================================================================
 void loop() {
 
-  buttoncheck();  //checks hardware button interaction
+
+newbuttons();
+ // buttoncheck();  //checks hardware button interaction
+
+
+
   attinydata();  //checks IR interaction and ADC Values for RTC health and MIC values
 
   
@@ -1280,6 +1303,22 @@ void loop() {
 
 
   if (radiostate == 0) {
+
+    //LEFT + RIGHT BUTTON TOGETHER
+    if (pressedbut == 8) {
+      if (menu == 0) {
+        //do stuff
+        popup = 0;
+        stepcounter = 0;
+        menu = 1;
+        menustep = 7;
+        versioninfo();
+      } else {
+        //do nothing
+      }
+    }
+
+
     //LEFT BUTTON
     if (pressedbut == 1) {
       if (colorset < 8) {
@@ -1313,13 +1352,17 @@ void loop() {
     }
 
     //CENTER BUTTON
-    if ((menu == 0) && (warningcode == 0)) {
+    if (menu == 0) { //popup or warningcode?
       if (pressedbut == 2) {
         if (alarmstate == 0) {
           if (alarmset == 0) {
+            if (warningcode == 0) {
             alarmset = 1;
+            }
           } else if (alarmset == 1) {
+             if (warningcode == 0) {
             alarmset = 0;
+             }
           }
         } else if (alarmstate == 1) {
           alarmstate = 0;
@@ -1331,6 +1374,7 @@ void loop() {
     //CENTER BUTTON LONG
     if (pressedbut == 5) {
       if (menu == 0) {
+      popup = 0;
       stepcounter = 0;
       menu = 1;
       settime();
@@ -2279,7 +2323,28 @@ void showhumidity() {
 }
 
 
+void versioninfo() {
+  while (menu == 1) {
+  newbuttons();
 
+ #ifdef OLED
+    PopUphandler();
+  #endif
+
+  if (pressedbut == 8) {  
+
+      Serial.println("exit version menu");
+      menustep = 0;
+      oledpage = 0;
+      menu = 0;
+      break;
+  }
+  else {
+    menustep = 7;
+  }
+
+  }
+}
 
 //SET TIME FUNCTION
 //==================================================================================================================
@@ -2297,7 +2362,8 @@ void settime() {
   Serial.println("entered menu");
 
 while (menu == 1) {
-    buttoncheck();
+    //buttoncheck();
+    newbuttons();
     attinydata();
     //delay(50);
     
@@ -2625,6 +2691,7 @@ while (menu == 1) {
   }
    
   }
+
    //yield();
 }
 
@@ -2886,6 +2953,7 @@ void alarmpopup() {
 #ifdef OLED
   u8g2.firstPage();
   do {
+    if (menu == 0) {
     if (popup == 1) {
       byte width = u8g2.getDisplayWidth();
       u8g2.setFont(u8g2_font_logisoso18_tf);
@@ -2899,6 +2967,7 @@ void alarmpopup() {
         u8g2.setCursor(pos, 25);
         u8g2.print("ALARM OFF");
       }
+    }
     }
 
   } while (u8g2.nextPage());
@@ -3044,10 +3113,11 @@ void warningpopup() {
         u8g2.print("RTC init");  //RTC init issue
       }
 
-      if (pressedbut == 2) {
-        dismissed = 1;
+      if (pressedbut == 2) { // button handeling
         warningcode = 0;
         popup = 0;
+        dismissed = 1;
+        oledpage = 0;
         Serial.print("Warning dismissed by user");
       }
       else {
@@ -3143,6 +3213,9 @@ void OLEDdraw() {
         oledpage = 10;
       } else if (menustep == 6) {  //YEAR
         oledpage = 11;
+      }
+      else if (menustep == 7) {  //YEAR
+        oledpage = 12;
       }
     }
 
@@ -3418,6 +3491,31 @@ void OLEDdraw() {
       u8g2.print(newmonth);
       u8g2.print(".");
       u8g2.print(newyear);
+    }
+    else if (oledpage == 12) {  //Status page cann be called longpresing up+down buttons simultaneously 
+      //u8g2.setFont(u8g2_font_logisoso18_tf);
+      u8g2.setFont(u8g2_font_6x10_tf);
+      
+      u8g2.setCursor(1, 10);
+      u8g2.print("LED CLOCK ");
+      u8g2.print("V ");
+      u8g2.print(version);
+      
+      u8g2.setCursor(1, 20);
+      u8g2.print("RTC voltage: ");
+      u8g2.print(RTC_voltage);
+
+      u8g2.setCursor(1, 30);
+      u8g2.print("IP: ");
+      if (wifion == 1) {
+        u8g2.print(WiFi.localIP());
+      }
+      else {
+        u8g2.print("offline");
+      }
+      
+      
+      
     }
 
   } while (u8g2.nextPage());
