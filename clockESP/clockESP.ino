@@ -188,7 +188,7 @@ RDA5807M radio;  // Create an instance of Class for RDA5807M Chip
 //#define Temp_F               //Teperature will be converted from C to F
 float tempoffset = -1.0;     //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
 float humidityoffset = 0.0;  //+1 Humidity adjustment (positive or negative value) only with Si7021 sensor
-int UTCoffset = +0;          //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync
+int UTCoffset = 1;          //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync (1 if summertime)
 int summertime = 1;          //todo
 //==================================================================================================================
 //USER CONFIG END
@@ -213,7 +213,8 @@ int summertime = 1;          //todo
 #define wifiStateADDR 5    // EEPROM Adress
 
 #define NUMPIXELS 60
-#define longpresstime 500  // in ms
+#define LONG_PRESS_TIME 500  // in ms
+
 
 #include <EEPROM.h>
 #include <Wire.h>
@@ -232,11 +233,6 @@ U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/SCL, /* data=*/S
 #endif
 
 
-#include <PinButton.h> //button management
-PinButton myBut_up(bt_up);
-PinButton myBut_down(bt_dwn);
-PinButton myBut_center(bt_set);
-PinButton myBut_wifi(bt_wifi);
 
 byte wireArray[8] = {};  //empty array where to put the numbers comming from the slave
 int micvalue = 0;
@@ -346,6 +342,8 @@ long timeSinceLastOLEDpage = 0;
 long timeSinceLastWUpdate = 0;
 const int UPDATE_INTERVAL_SECS = 10 * 60;  // Update every 10 minutes
 bool AP_mode = false;
+
+
 
 
 
@@ -610,8 +608,8 @@ void setup() {
   if (!sensor.begin()) {
     Serial.println("ERROR: Did not find Si7021 sensor!");
     #ifdef Buzzer
-      tone(buzzer, 500, 1000);
-      delay(1000);
+     // tone(buzzer, 500, 1000);
+     // delay(1000);
     #endif    
     //warningcode = 1;
     //^ removing for now as this warning will be triggered on cloned sensors 
@@ -772,6 +770,9 @@ void setup() {
   nowday = now.day(), DEC;
   nowmonth = now.month(), DEC;
   nowyear = now.year(), DEC;
+
+
+  
 
 }
 
@@ -946,88 +947,264 @@ void runserver() {
 //BUTTON READING
 //==================================================================================================================
 
-byte newbuttons() {
-
+byte input_handeler() {
+int i_butt = 0;
 byte buttonz = 0;
-
-myBut_up.update();
-myBut_down.update();
-myBut_center.update();
-myBut_wifi.update();
-
-attinydata(); // FIXME integrate IR
+byte val4 = 0;
 
 
+ 
+  // Hardware buttons handeling ------------------------------
+
+ if ((digitalRead(bt_dwn) != 1) && (digitalRead(bt_up) != 1)) {
+     while ((digitalRead(bt_dwn) != 1) && (digitalRead(bt_up) != 1)) {
+       delay(2);
+       i_butt++;
+     }
+     #ifdef Buzzer
+       tone(buzzer, 100, 50);
+     #endif
+     buttonz = 8;  //Buttons 1+3 pressed
+
+    if (i_butt > (LONG_PRESS_TIME)) {
+       //buttonz = 8;  //Buttons 1+3 pressed long
+       buttonz = 7;  //Emulate Wifi Button pressed
+       #ifdef Buzzer
+         tone(buzzer, 500, 500);
+       #endif
+     }
+   }
+
+else if (digitalRead(bt_up) != 1) {
+     while (digitalRead(bt_up) != 1) {
+       delay(2);
+       i_butt++;
+     }
+     #ifdef Buzzer
+       tone(buzzer, 100, 50);
+     #endif
+     buttonz = 1;  //Up pressed
+
+     if (i_butt > (LONG_PRESS_TIME)) {
+     #ifdef Buzzer
+       tone(buzzer, 100, 500);
+     #endif
+       buttonz = 4;  //Button up pressed long
+     }
+   }
+
+else if (digitalRead(bt_dwn) != 1) {
+     while (digitalRead(bt_dwn) != 1) {
+       delay(2);
+       i_butt++;
+     }
+     buttonz = 3;  //Down pressed
+     #ifdef Buzzer
+       tone(buzzer, 100, 50);
+     #endif
+
+     if (i_butt > (LONG_PRESS_TIME)) {
+       buttonz = 6;  //Button down pressed long
+       #ifdef Buzzer
+         tone(buzzer, 100, 500);
+       #endif
+     }
+   } 
+
+
+   else if (digitalRead(bt_set) != 1) {
+     while (digitalRead(bt_set) != 1) {
+       delay(2);
+       i_butt++;
+     }
+     buttonz = 2;  //Center pressed
+       #ifdef Buzzer
+         tone(buzzer, 100, 50);
+       #endif
+
+     if (i_butt > (LONG_PRESS_TIME)) {
+       buttonz = 5;  //Button center pressed long
+       #ifdef Buzzer
+         tone(buzzer, 100, 500);
+       #endif
+     }
+   } 
+
+
+   
+   else if (digitalRead(bt_wifi) != 1) {
+     while (digitalRead(bt_wifi) != 1) {
+       delay(2);
+       i_butt++;
+     }
+     buttonz = 7;  //Wifi Button pressed
+     #ifdef Buzzer
+       tone(buzzer, 100, 50);
+     #endif
+   }
 
 
 
-if (myBut_up.isClick()) {
-  #ifdef Buzzer
-      tone(buzzer, 100, 50);
-    #endif
-    Serial.println("up pressed");
-    buttonz = 1;  //Up pressed
-}
-else if (myBut_up.isLongClick()) {
-  #ifdef Buzzer
-      tone(buzzer, 100, 500);
-    #endif
-    Serial.println("up long pressed");
-    buttonz = 4;  //Up long pressed
-}
-if (myBut_center.isClick()) {
-  #ifdef Buzzer
-      tone(buzzer, 100, 50);
-    #endif
-    Serial.println("set pressed");
-    buttonz = 2;  //Set pressed
-}
-else if (myBut_center.isLongClick()) {
-  #ifdef Buzzer
-      tone(buzzer, 100, 500);
-    #endif
-    Serial.println("set long pressed");
-    buttonz = 5;  //SetUp long pressed
-}
-if (myBut_down.isClick()) {
-  #ifdef Buzzer
-      tone(buzzer, 100, 50);
-    #endif
-    Serial.println("down pressed");
-    buttonz = 3;  //Down pressed
-}
-else if (myBut_down.isLongClick()) {
-  #ifdef Buzzer
-      tone(buzzer, 100, 500);
-    #endif
-    Serial.println("down long pressed");
-    buttonz = 6;  //Down long pressed
-}
+  // IR buttons handeling ------------------------------
 
-if (myBut_wifi.isSingleClick()) {
-  #ifdef Buzzer
-      tone(buzzer, 100, 50);
-    #endif
-    Serial.println("wifi pressed");
-    buttonz = 7;  //Down pressed
-}
+   val4 = attinydata(); // FIXME integrate IR
 
-  if ((myBut_up.isLongClick()) && (myBut_down.isLongClick())){ //VESION MENU COMBO
-  #ifdef Buzzer
-      tone(buzzer, 100, 500);
-    #endif
-    Serial.println("left+right clicked short");
-    buttonz = 8;
+  //mapping IR buttons
+  // 5 = Up
+  // 3 = Center
+  // 4 = Down
+  // 7 = Left
+  // 6 = Right
+  // 2 = Play/Pause
+  // 1 = Menu
+
+
+//Radio Control
+  if (val4 == 2) { //play button
+      #ifdef Buzzer
+       tone(buzzer, 100, 50);
+      #endif
+    if ((radiostate == 0) && (menu == 0)) {
+      radiostate = 1;
+      oledpage = 3; // Radio Display
+    } else {
+      radiostate = 0;
+      oledpage = 0;
+    }
   }
 
-pressedbut = buttonz;
-return buttonz;
+
+
+ if (val4 == 1) { //menu button
+    if (radiostate == 0) {
+      #ifdef Buzzer
+       tone(buzzer, 500, 200);
+     #endif
+    buttonz = 5; //act as longpress center hardware button
+    }
+ }
+   
+   else if (val4 == 3) { //center button
+    #ifdef Buzzer
+       tone(buzzer, 100, 50);
+    #endif
+     buttonz = 2; // alarm on/off
+   }
+
+
+    else if (val4 == 6) { //right button
+    if ((menu == 0) && (radiostate == 0))  {
+    #ifdef Buzzer
+       tone(buzzer, 100, 50);
+    #endif
+     buttonz = 1; //acts as up hardware button > colorchange
+     }
+     else if (radiostate == 1) {  // controlls frequency up
+     #ifdef Buzzer
+       tone(buzzer, 100, 50);
+     #endif
+      #ifdef RAD
+      radio.seekUp(true);
+      #endif
+    }
+    
+
+   }
+    else if (val4 == 7) { //left button
+     if ((menu == 0) && (radiostate == 0)) {
+       #ifdef Buzzer
+       tone(buzzer, 100, 50);
+      #endif
+     buttonz = 3; //acts as down hardware button > pageflip
+     }
+      else if (radiostate == 1) {  // controlls frequency down
+      #ifdef Buzzer
+       tone(buzzer, 100, 50);
+      #endif
+      #ifdef RAD
+      radio.seekDown(true);
+      #endif
+    } 
+   }
+
+     else if (val4 == 5) { //up
+     if (menu == 1) {
+      #ifdef Buzzer
+       tone(buzzer, 100, 50);
+      #endif
+     buttonz = 1;
+     }
+      else if (radiostate == 1) {  // controlls volume while radio is on
+      // Volume Control > 75 = muted, 0 = max volume
+      #ifdef Buzzer
+       tone(buzzer, 100, 50);
+      #endif
+      if (volume < 40) {
+        volume++;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
+        radio.setMute(false);
+#endif
+      } else {
+        volume = 40;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(true);
+        radio.setMute(true);
+#endif
+      }
+    } 
+    else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off and menu not active
+    #ifdef Buzzer
+       tone(buzzer, 100, 50);
+    #endif
+      //do stuff FIXME ADD BRIGHTNESS CONTROL
+    }
+   }
+
+
+   else if (val4 == 4) { //down
+     if (menu == 1) {
+       #ifdef Buzzer
+       tone(buzzer, 100, 50);
+       #endif
+     buttonz = 3;
+     }
+      else if (radiostate == 1) {
+       #ifdef Buzzer
+       tone(buzzer, 100, 50);
+       #endif
+      // Volume Control > 75 = muted, 0 = max volume
+      if (volume > 0) {
+        volume--;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
+        radio.setMute(false);
+#endif
+      } else {
+        volume = 0;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
+        radio.setMute(false);
+#endif
+      }
+    } 
+    else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off and menu not active
+      #ifdef Buzzer
+       tone(buzzer, 100, 50);
+    #endif
+    //do stuff FIXME ADD BRIGHTNESS CONTROL
+    }
+   }
+
+
+
+   pressedbut = buttonz;
+   return buttonz;
 }
-
-
-
-
-
 
 
 
@@ -1037,7 +1214,7 @@ return buttonz;
 //==================================================================================================================
 
 
-void attinydata() {
+byte attinydata() {
 
 
 Wire.requestFrom(0x08, 8);  // request 8 bytes from slave device #8
@@ -1072,105 +1249,8 @@ Wire.requestFrom(0x08, 8);  // request 8 bytes from slave device #8
 
 
 
-// MENU CALL
 
- if (val4 == 1) { //center
-   if ((menu == 0) && (radiostate == 0) && (popup == 0)) {
-      pressedbut = 5; //act as longpress center hardware button
-   }
-   else {
-    pressedbut = 5; //act as longpress center hardware button
-   }
- }
-
-
-  //Radio Control
-  if (val4 == 2) {
-    if ((radiostate == 0) && (menu == 0)) {
-      radiostate = 1;
-      oledpage = 3; // Radio Display
-
-    } else {
-      radiostate = 0;
-      oledpage = 0;
-    }
-  }
-
-//Freqency change and Colormode
-
-if (val4 == 6) {          //Right button
-    if (radiostate == 1) {  // controlls volume while radio is on
-    #ifdef RAD
-      radio.seekUp(true);
-      #endif
-    } else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off
-      if (colorset > 0) {
-      colorset--;
-    } else {
-      colorset = 8;
-    }
-  }
-  }
-
-   if (val4 == 7) {          //Left button
-    if (radiostate == 1) {  // controlls volume while radio is on
-    #ifdef RAD
-      radio.seekDown(true);
-      #endif
-    } else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off
-      if (colorset < 8) {
-      colorset++;
-    } else {
-      colorset = 0;
-    }
-    }
-  }
-
-  // Volume & Brightness Control > 75 = muted, 0 = max volume
-
-  if (val4 == 5) { //DOWN Button
-    if (radiostate == 1) {
-      if (volume > 0) {
-        volume--;
-#ifdef RAD
-        pt2257.set_volume(volume);  // 0-75 possible
-        pt2257.mute(false);
-        radio.setMute(false);
-#endif
-      } else {
-        volume = 0;
-#ifdef RAD
-        pt2257.set_volume(volume);  // 0-75 possible
-        pt2257.mute(false);
-        radio.setMute(false);
-#endif
-      }
-    } else if (radiostate == 0) {  // controlls brightness while radio is off
-      //do stuff
-    }
-  }
-  if (val4 == 4) { //UP Button
-    if (radiostate == 1) {  // controlls volume while radio is on
-      if (volume < 40) {
-        volume++;
-#ifdef RAD
-        pt2257.set_volume(volume);  // 0-75 possible
-        pt2257.mute(false);
-        radio.setMute(false);
-#endif
-      } else {
-        volume = 40;
-#ifdef RAD
-        pt2257.set_volume(volume);  // 0-75 possible
-        pt2257.mute(true);
-        radio.setMute(true);
-#endif
-      }
-    } else if (radiostate == 0) {  // controlls brightness while radio is off
-      //do stuff
-    }
-  }
-
+return val4;
 
 }
 
@@ -1184,12 +1264,11 @@ if (val4 == 6) {          //Right button
 void loop() {
 
 
-newbuttons();
- // buttoncheck();  //checks hardware button interaction
+input_handeler();
 
 
 
-  attinydata();  //checks IR interaction and ADC Values for RTC health and MIC values
+ // attinydata();  //checks IR interaction and ADC Values for RTC health and MIC values
 
   
   // Serial.print("adcvalue1: ");
@@ -1480,7 +1559,7 @@ newbuttons();
 
  // Handle PopUps and Time Updates ------------------------------
 
-    PopUphandler();
+    popup_handeler();
     updatetime();
   
 }
@@ -2328,10 +2407,12 @@ void showhumidity() {
 
 void versioninfo() {
   while (menu == 1) {
-  newbuttons();
+
+
+  input_handeler();
 
  #ifdef OLED
-    PopUphandler();
+    popup_handeler();
   #endif
 
   if (pressedbut == 8) {  
@@ -2343,8 +2424,24 @@ void versioninfo() {
       break;
   }
   else {
-    menustep = 7;
+   // menustep = 7;
   }
+
+uint32_t off = pixels.Color(0, 0, 0); 
+uint32_t white = pixels.Color(255, 255, 255);
+pixels.fill(white, 0, 29);
+
+number_hour2 = 15;
+number_hour1 = 15;
+number_min1 = 15;
+number_min2 = 15;
+
+
+mapPixels();
+setbrightness();
+pixels.show();
+
+
 
   }
 }
@@ -2365,11 +2462,8 @@ void settime() {
   Serial.println("entered menu");
 
 while (menu == 1) {
-    //buttoncheck();
-    newbuttons();
-    attinydata();
-    //delay(50);
-    
+    input_handeler();
+    //attinydata();
 
  // Color setup ------------------------------
 
@@ -2630,13 +2724,13 @@ while (menu == 1) {
 
 
  #ifdef OLED
-    PopUphandler();
+    popup_handeler();
   #endif
 
     mapPixels();
     setbrightness();
     pixels.show();
-    delay(10);
+    //delay(10);
 
     
   // Saving settings to EEPROM an leaving  ------------------------------
@@ -2795,7 +2889,7 @@ uint32_t Wheel(byte WheelPos) {
 //==================================================================================================================
 
 
-void PopUphandler() {
+void popup_handeler() {
 
   if (popup == 1) {
     popcounter++;
@@ -2824,6 +2918,7 @@ void PopUphandler() {
   // Warnings  ------------------------------
 
   if (warningcode != 0) {
+    
     popcounter = 0;
     poptime = 1000;  //longer warning value
     popup = 1;
@@ -2837,7 +2932,7 @@ void PopUphandler() {
 
   else if (colorset != old_colorset) {
     #ifdef Buzzer
-      tone(buzzer, 100, 50);
+      //tone(buzzer, 100, 50);
     #endif
     popcounter = 0;
     popup = 1;
@@ -2851,7 +2946,7 @@ void PopUphandler() {
 
   else if (alarmset != old_alarmset) {
     #ifdef Buzzer
-      tone(buzzer, 100, 50);
+      //tone(buzzer, 100, 50);
     #endif
     popcounter = 0;
     popup = 1;
@@ -2866,7 +2961,7 @@ void PopUphandler() {
   
   else if (wifion != old_wifion) {
     #ifdef Buzzer
-      tone(buzzer, 100, 50);
+      //tone(buzzer, 100, 50);
     #endif
     popcounter = 0;
     if (wifion == 1) {
@@ -2890,7 +2985,7 @@ void PopUphandler() {
 #endif
     old_brightness = brightness;
     #ifdef Buzzer
-      tone(buzzer, 100, 50);
+    //  tone(buzzer, 100, 50);
     #endif
   }
 
@@ -2899,7 +2994,7 @@ void PopUphandler() {
 
   else if (volume != old_volume) {
     #ifdef Buzzer
-      tone(buzzer, 100, 50);
+      //tone(buzzer, 100, 50);
     #endif
     popcounter = 0;
 
@@ -2996,9 +3091,9 @@ void wifipopup() {
         u8g2.setCursor(pos, 25);
         u8g2.print("WiFi: OFF");
       } else {
-        byte pos = ((width - (u8g2.getUTF8Width("ONLINE"))) / 2);  //calculate the text lenght
+        byte pos = ((width - (u8g2.getUTF8Width("WiFi: ON"))) / 2);  //calculate the text lenght
         u8g2.setCursor(pos, 25);
-        u8g2.print("ONLINE");
+        u8g2.print("WiFi: ON");
 
         //u8g2.setFont(u8g2_font_6x10_tf);
         //u8g2.setCursor(0, 32);
@@ -3097,6 +3192,9 @@ void brightnesspopup() {
 void warningpopup() {
 #ifdef OLED
   u8g2.firstPage();
+
+  
+
   do {
 
     if (popup == 1) {
@@ -3223,26 +3321,31 @@ void OLEDdraw() {
     }
 
 
-  // TESTING  ------------------------------
+  // TESTING OLED PRINTOUT ------------------------------
 
 
 
     u8g2.setFont(u8g2_font_6x10_tf); 
     u8g2.setCursor(0, 40);
-    u8g2.print("popup:");
+    u8g2.print("pop:");
     u8g2.print(popup);
 
-    u8g2.setCursor(50, 40);
+    u8g2.setCursor(0, 50);
+    u8g2.print("men:");
+    u8g2.print(menu);
+    
+    u8g2.setCursor(38, 40);
     u8g2.print("loop:");
     u8g2.print(looptime);
 
-    u8g2.setCursor(0, 50);
-    u8g2.print("menu:");
-    u8g2.print(menu);
-
-     u8g2.setCursor(50, 50);
+    u8g2.setCursor(38, 50);
     u8g2.print("step:");
     u8g2.print(menustep);
+
+    u8g2.setCursor(90, 50);
+    u8g2.print(nowhour);
+    u8g2.print(":");
+    u8g2.print(nowminute);
 
 
 
@@ -3501,12 +3604,13 @@ void OLEDdraw() {
       
       u8g2.setCursor(1, 10);
       u8g2.print("LED CLOCK ");
-      u8g2.print("V ");
+      u8g2.print("V");
       u8g2.print(version);
       
       u8g2.setCursor(1, 20);
       u8g2.print("RTC voltage: ");
       u8g2.print(RTC_voltage);
+      u8g2.print("V");
 
       u8g2.setCursor(1, 30);
       u8g2.print("IP: ");
