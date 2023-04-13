@@ -1,29 +1,81 @@
-char version[] = "0.6";
+//put your WiFi credentials in her if you want
 
-// TO DO
+//const char* ssid     = "xxx";
+//const char* password = "xxx";
+
+char version[] = "0.7";
+
+
+//FIXME AP Mode is not visible on display
+//wifi off popup takes longer to hide if wifi was set on prior
+
+
+//======================
+// NEW HARDWARE:
+//======================
+// (ongoing) RADIO SUPPORT (testboard req)
+// finalise radio PCBs
+
+
+
+// TO DO - ROADMAP
 
 // x RTC Bat check (basic warning system)
-// Brightness Setting popup & menu
+// x IR Remote Menu access
+// new main menu system
+// add summertime option
+// Brightness Setting popup & menu > //    make brightness manually adjustable as a setting (1-10 manual, 0 Auto)
 // Digit animation setting menu
 // Pageslide animation setting menu
-//0.7
-
-// IR Remote Menu access
-// add summertime option
 // 0.8
 
 
 // OLED Graphics UI
 // OLED Graphics Forecast
+// Utilise AudioSensor
 // 0.9
 
-// TBD: Radio UI + FAV management (IR Only)
-// port to FAST LED
+// TBD: Radio UI + FAV management (IR Only propably)
+// 0.95
+
+// port to fastLED to remove flickering
+// change LED order 1dig, 2dig, dots, 3dig, 4dig.
 //1.0
 
 
-// finalise radio PCBs
-// Web stuff (see below)
+//Controll & Function notes
+//UP  >        x Toggle colors (00-09) (EEPROM). Mic function adds additional color preset (10)?
+//UP long >      Set Clock Animation OFF/1min/10min (EEPROM) "CA:00/01/02"
+//Center >     x Alarm ON/OFF? (EEPROM) Alarm Indication???
+//Center long >x Set the time (+Alarm) > later enter menu
+//Down >       x Toggle pages (three pages with tempsensor, two without)
+//Down long >   Set Pages scrolling ON/OFF (EEPROM) "PS:00/01"
+
+// ^^ will be reworked with main menu system
+
+//Needed digits
+//An: >ClockAnimation
+//AL: >Alarm
+//PS: >PageScroll
+
+//>> More charakters needed "A" "n" "P" "S" "L"
+
+
+// Web stuff as bonus to dos (see below)
+
+//======================
+// WEB UI:
+//======================
+//    find out how to store apikey, city, location (or better KEY & cityID)
+//    read json full in web-interface on load (reload if something is changed)
+//    Create the UI
+//   x moove from SPIFFS to LittleFS
+//   x Enable/disable wifi
+//   x sync weather and time at start once then in 10 min interval
+//   x create json structure for all possible settings > location id and key missing
+// x add WifiClient (ideally non blocking)
+
+
 
 
 
@@ -37,78 +89,9 @@ char version[] = "0.6";
 //  Adafruit Si7021 1.3.0
 //  RTClib by Adafruit 1.12.4 
 //  ArduinoJson by Benoit Blanchon 5.13.2
-
 //  Ticker  //https://github.com/esp8266/Arduino/tree/master/libraries/Ticker
-//  Multibutton 1.2.0: https://github.com/poelstra/arduino-multi-button/releases
 
 
-
-//const char* ssid     = "xxx";
-//const char* password = "xxx";
-
-#define DEBUG  //Debug data over Serial
-
-//AP Mode is not visible on display
-//wifi off popup takes longer to hide if wifi was set on prior
-
-//TODOS:
-//======================
-//   add summertime option
-//    port to fastLED to remove flickering
-//    finish digit animation setting 
-//    finish pageslide setting
-//    create a menu: m01 > set time and alarm; m02 > set pageslide on/ff; m02 > set digit animation; m03 > set brightness; m04 > mic on/off
-//    make brightness manually adjustable as a setting (1-10 manual, 0 Auto)
-//    change LED order 1dig, 2dig, dots, 3dig, 4dig.
-//   x add WifiClient (ideally non blocking)
-
-
-
-//    NEW HARDWARE:
-//======================
-//    (ongoing)  OLED support
-//    (ongoing) IR support (attiny) (testboard req)
-//    (ongoing) RADIO SUPPORT (testboard req)
-//    x ADC support over I2C (testboard req)
-//    x RTC battery alarm()
-
-
-//======================
-//    x BUILD FINAL PCB!
-//======================
-
-//======================
-//    BUILD FINAL CLOCK!
-//======================
-
-//    WEB UI:
-//======================
-
-//    find out how to store apikey, city, location (or better KEY & cityID)
-//    read json full in web-interface on load (reload if something is changed)
-//    Create the UI
-//   x moove from SPIFFS to LittleFS
-//   x Enable/disable wifi
-//   x sync weather and time at start once then in 10 min interval
-//   x create json structure for all possible settings > location id and key missing
-
-
-
-//Controll & Function notes
-//UP  >        x Toggle colors (00-09) (EEPROM). Mic function adds additional color preset (10)?
-//UP long >     Set Clock Animation OFF/1min/10min (EEPROM) "CA:00/01/02"
-//Center >     x Alarm ON/OFF? (EEPROM) Alarm Indication???
-//Center long >x Set the time (+Alarm) > later enter menu
-//Down >       x Toggle pages (three pages with tempsensor, two without)
-//Down long >   Set Pages scrolling ON/OFF (EEPROM) "PS:00/01"
-
-//Needed digits
-//An: >ClockAnimation
-//AL: >Alarm
-//PS: >PageScroll
-
-
-//>> More charakters needed "A" "n" "P" "S" "L"
 
 //Returned hardware Button codes (val: buttonpress = X)
 // 1 = Up
@@ -136,7 +119,6 @@ char version[] = "0.6";
 //0x08 - ATtiny (8)
 
 
-
 //Code by Albert Kravcov
 //==================================================================================================================
 
@@ -146,22 +128,30 @@ char version[] = "0.6";
 //OPTIONAL USER CONFIG START
 //==================================================================================================================
 
-//#define AUTOROTATION  //Sliding Digits (Time > Temp > Humidity >)
-#define LightSensor   //An external photo-resistor can automatically adjust brightness of the clock
-#define Si7021sensor  //The Si7021 sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
-#define OLED          //OLED SCEEN < WORK IN PROGRESS
-#define IR            //TODO: IR Remot control via i2c using an ATtiny845
-#define RAD           //TODO: RADIO MODULE - Requres OLED & IRCONTROL option
-//#define AudioSensor     //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
-#define Buzzer
+//#define AUTOROTATION     //Sliding Digits (Time > Temp > Humidity >)
+#define LightSensor        //An external photo-resistor can automatically adjust brightness of the clock
+#define Si7021sensor       //The Si7021 sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
+#define OLED               //OLED SCEEN 
+#define IR                 //IR Remot control via i2c using an ATtiny845
+#define RAD                //TODO: RADIO MODULE - Requres OLED & IR option!
+//#define AudioSensor      //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
+#define Buzzer             //Buzzer sounds on button press
+#define DEBUG              //Debug data over Serial
+#define lang_DE            //Geman weekdays
+//#define Temp_F           //Teperature will be converted from C to F
+float tempoffset = -1.0;   //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
+float humidityoffset = 0.0;//+1 Humidity adjustment (positive or negative value) only with Si7021 sensor
+int UTCoffset = 1;         //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync (1 if summertime)
+int summertime = 1;        //todo
+//==================================================================================================================
+//USER CONFIG END
 //==================================================================================================================
 
-#define RTCtemp
 
+#define RTCtemp
 #ifdef Si7021sensor
 #undef RTCtemp
 #endif
-
 
 #ifdef Si7021sensor
 #include "Adafruit_Si7021.h"
@@ -179,20 +169,8 @@ Adafruit_Si7021 sensor = Adafruit_Si7021();
 
 PT2257 pt2257;
 RDA5807M radio;  // Create an instance of Class for RDA5807M Chip
-
 #endif
 
-//==================================================================================================================
-
-#define lang_DE              //Geman weekdays
-//#define Temp_F               //Teperature will be converted from C to F
-float tempoffset = -1.0;     //-1 Temperature adjustment (positive or negative value) no Si7021 Sensor required
-float humidityoffset = 0.0;  //+1 Humidity adjustment (positive or negative value) only with Si7021 sensor
-int UTCoffset = 1;          //UTC Time offset in hours e.g. ("1" or "-1") - Used only for WiFi-Sync (1 if summertime)
-int summertime = 1;          //todo
-//==================================================================================================================
-//USER CONFIG END
-//==================================================================================================================
 
 //D1-SCL | D2-SDA
 #define stateLED D0   //no PWM, Alarmstate LED
@@ -1025,7 +1003,7 @@ else if (digitalRead(bt_dwn) != 1) {
      if (i_butt > (LONG_PRESS_TIME)) {
        buttonz = 5;  //Button center pressed long
        #ifdef Buzzer
-         tone(buzzer, 100, 500);
+         tone(buzzer, 500, 100);
        #endif
      }
    } 
@@ -1047,7 +1025,7 @@ else if (digitalRead(bt_dwn) != 1) {
 
   // IR buttons handeling ------------------------------
 
-   val4 = attinydata(); // FIXME integrate IR
+   val4 = attinydata(); 
 
   //mapping IR buttons
   // 5 = Up
@@ -1078,7 +1056,7 @@ else if (digitalRead(bt_dwn) != 1) {
  if (val4 == 1) { //menu button
     if (radiostate == 0) {
       #ifdef Buzzer
-       tone(buzzer, 500, 200);
+       tone(buzzer, 500, 100);
      #endif
     buttonz = 5; //act as longpress center hardware button
     }
@@ -1139,22 +1117,22 @@ else if (digitalRead(bt_dwn) != 1) {
       #ifdef Buzzer
        tone(buzzer, 100, 50);
       #endif
-      if (volume < 40) {
-        volume++;
+      if (volume > 0) {
+        volume--;
 #ifdef RAD
         pt2257.set_volume(volume);  // 0-75 possible
         pt2257.mute(false);
         radio.setMute(false);
 #endif
       } else {
-        volume = 40;
+        volume = 0;
 #ifdef RAD
         pt2257.set_volume(volume);  // 0-75 possible
-        pt2257.mute(true);
-        radio.setMute(true);
+        pt2257.mute(false);
+        radio.setMute(false);
 #endif
       }
-    } 
+      }
     else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off and menu not active
     #ifdef Buzzer
        tone(buzzer, 100, 50);
@@ -1176,22 +1154,23 @@ else if (digitalRead(bt_dwn) != 1) {
        tone(buzzer, 100, 50);
        #endif
       // Volume Control > 75 = muted, 0 = max volume
-      if (volume > 0) {
-        volume--;
+      if (volume < 40) {
+        volume++;
 #ifdef RAD
         pt2257.set_volume(volume);  // 0-75 possible
         pt2257.mute(false);
         radio.setMute(false);
 #endif
       } else {
-        volume = 0;
+        volume = 40;
 #ifdef RAD
         pt2257.set_volume(volume);  // 0-75 possible
-        pt2257.mute(false);
-        radio.setMute(false);
+        pt2257.mute(true);
+        radio.setMute(true);
 #endif
       }
     } 
+
     else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off and menu not active
       #ifdef Buzzer
        tone(buzzer, 100, 50);
@@ -2895,8 +2874,6 @@ void popup_handeler() {
     popcounter++;
 
     if (popcounter >= poptime) {
-      //Serial.println("Popup timeout");
-
       //Saving to eeprom - FIXME > only when a change is happened
       EEPROM.put(alarmStateADDR, alarmset);
       EEPROM.put(colorADDR, colorset);
