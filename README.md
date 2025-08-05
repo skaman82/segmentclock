@@ -4,8 +4,12 @@ Arduino 7-Segment RGB LED Clock
 # Functions
 - Colorfull 7-segments clock with multiple color presets</br>
 - Auto LED brightness adjustment (optional)</br>
-- Support multiple sensors like DHT(for temperature + humidity) and audio sensor(color effects)</br>
+- Support sensor like Si7021(for temperature + humidity)</br>
 - Alarm function</br>
+- IR Remote (optional)</br>
+- Web Weather forecast (not finished yet)</br>
+- Optional Radio Module: PT2257, RDA5807M or SI4703 supported (requires IR function)</br>
+
 …</br></br>
 
 # Materials
