@@ -17,8 +17,8 @@ Arduino 7-Segment RGB LED Clock
 - 3x 6mm Pushbuttons</br>
 - 3D-printed parts</br>
 - DS3231 RTC Module (the small one)</br>
-- Arduino Nano (or my custom PCB)</br>
+- ESP8266 D1 mini (or my custom PCB)</br>
 - Photo-Resistor (optional)</br>
-- DHT22 Temperature Sensor (optional)</br>
+- Si7021 Temperature Sensor (optional)</br>
 - GY-MAX4466 Microphone Module (optional)</br>
 - Some resistors (10k, 470R, 1k)</br>
