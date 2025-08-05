@@ -15,12 +15,11 @@ char version[] = "0.8";
 //======================
 // NEW HARDWARE:
 //======================
-// (ongoing) RADIO SUPPORT (testboard req)
-// finalise radio PCBs
+// (x) RADIO SUPPORT (testboard req)
+// (x) finalise radio PCBs
 
 
-
-// TO DO - ROADMAP
+// ROADMAP
 
 // x RTC Bat check (basic warning system)
 // x IR Remote Menu access
@@ -36,12 +35,13 @@ char version[] = "0.8";
 // OLED Graphics UI
 // OLED Graphics Forecast
 // Utilise AudioSensor
+// Fix blocking AP
 // 0.9
 
-// TBD: Radio UI + FAV management (IR Only propably)
+// TBD: Radio UI + FAV management (IR Only)
 // 0.95
 
-// port to fastLED to remove flickering
+// port to fastLED to remove ocasional flickering in the menus
 //1.0
 
 
@@ -72,10 +72,10 @@ char version[] = "0.8";
 //    read json full in web-interface on load (reload if something is changed)
 //    Create the UI
 //   x moove from SPIFFS to LittleFS
-//   x Enable/disable wifi
+//   x Enable/disable wifi (currently deactivated)
 //   x sync weather and time at start once then in 10 min interval
 //   x create json structure for all possible settings > location id and key missing
-// x add WifiClient (ideally non blocking)
+//   x add WifiClient (ideally non blocking)
 
 
 
@@ -1415,8 +1415,8 @@ input_handeler();
  // WIFI BUTTON AND STATUS ------------------------------
 
   if (pressedbut == 7) {
-//FIXME > when user turns on wifi it is stuck in AP mode until it can connect - no way back to offline mode until wifi settings are put in
-     //Deactivated for now
+    //FIXME > when user turns on wifi it is stuck in AP mode until it can connect - no way back to offline mode until wifi settings are put in
+    //Deactivated for now
 
     if (wifion == 0) {
     //  wifion = 1; 
