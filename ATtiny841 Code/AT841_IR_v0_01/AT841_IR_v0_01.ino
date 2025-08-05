@@ -28,16 +28,24 @@
 
 //A1 RTC; AND A2 MIC 
 
-const int sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
+const int sampleWindow = 10; // Sample window width in mS (50 mS = 20Hz)
 unsigned int sample;
 
-#define RECV_PIN        1  //only one INT0 pin on ATtiny85 
-#define STATE_LED_PIN   3 //4 on attiny/13 on nano
-#define AIN1_PIN        A1 //pa1 RTC BATTERY
+#define RECV_PIN        1  //only one INT0 pin on ATtiny85 > IR Receiver
+#define STATE_LED_PIN   3 //4 on attiny/13 on nano > LED
+#define AIN1_PIN        A1 //pa1 > RTC BATTERY
 //#define AIN2_PIN        A0 //pa0
-#define AIN3_PIN        A2 //pa2
+#define AIN3_PIN        A2 //pa2 > Mic Sense
 
 unsigned long key_value = 0;
+
+
+// AGC parameters
+const int AGC_THRESHOLD = 200; // threshold for AGC adjustment
+const int AGC_STEP = 50; // AGC adjustment step size
+const int AGC_MIN = 100; // minimum gain value
+const int AGC_MAX = 1024; // maximum gain value
+int agc_gain = AGC_MAX/2; // initial gain value
 
 
 
@@ -149,7 +157,9 @@ if (gotvolts == 1) {
   unsigned int signalMin = 1024;
 
 
-  // collect data for 50 mS
+
+  // collect data for 10 mS
+  
   while (millis() - startMillis < sampleWindow)
   {
     sample = analogRead(AIN3_PIN);
@@ -165,12 +175,28 @@ if (gotvolts == 1) {
       }
     }
   }
-  peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
-  //double volts = (peakToPeak * 5.0) / 1024;  // convert to volts
-  //  sound = volts * 100; //covert float to integer
-  sound = peakToPeak; //covert float to integer
-//sound = analogRead(AIN3_PIN)
 
+  peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
+
+  sound = peakToPeak; //covert float to integer
+ 
+/*
+// Read the analog input from the microphone
+  //int mic_reading = analogRead(AIN3_PIN);
+    int mic_reading = peakToPeak;
+
+
+  // Adjust the gain based on the volume of the input signal
+  if (mic_reading > AGC_THRESHOLD && agc_gain > AGC_MIN) {
+    agc_gain -= AGC_STEP;
+  } else if (mic_reading < AGC_THRESHOLD && agc_gain < AGC_MAX) {
+    agc_gain += AGC_STEP;
+  }
+
+  // Apply the gain to the input signal
+  int adjusted_reading = mic_reading * agc_gain / AGC_MAX;
+  sound = adjusted_reading; 
+*/
 
   ///////// READING IR
 

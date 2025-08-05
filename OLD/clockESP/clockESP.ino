@@ -1,11 +1,11 @@
-//NO PT version
+//PT version
 
 //put your WiFi credentials in her if you want
 
 //const char* ssid     = "xxx";
 //const char* password = "xxx";
 
-char version[] = "0.8";
+char version[] = "0.7";
 
 
 //FIXME AP Mode is not visible on display
@@ -24,7 +24,6 @@ char version[] = "0.8";
 
 // x RTC Bat check (basic warning system)
 // x IR Remote Menu access
-// x Double Segment support
 // new main menu system
 // add summertime option
 // Brightness Setting popup & menu > //    make brightness manually adjustable as a setting (1-10 manual, 0 Auto)
@@ -42,6 +41,7 @@ char version[] = "0.8";
 // 0.95
 
 // port to fastLED to remove flickering
+// change LED order 1dig, 2dig, dots, 3dig, 4dig.
 //1.0
 
 
@@ -131,14 +131,13 @@ char version[] = "0.8";
 //==================================================================================================================
 
 //#define AUTOROTATION     //Sliding Digits (Time > Temp > Humidity >)
-//#define Doublesegment      //Use two addresable LEDs per segment
 #define LightSensor        //An external photo-resistor can automatically adjust brightness of the clock
 #define Si7021sensor       //The Si7021 sensor will show temperature and humidity data > CONFIGURE SENSOR BELLOW!
 #define OLED               //OLED SCEEN 
 #define IR                 //IR Remot control via i2c using an ATtiny845
 #define RAD                //TODO: RADIO MODULE - Requres OLED & IR option!
 //#define AudioSensor      //TODO: uncomment if you are using an microphone, adds additional animation mode controlled by sound
-#define Buzzer             //Buzzer sounds on button press
+//#define Buzzer             //Buzzer sounds on button press
 #define DEBUG              //Debug data over Serial
 #define lang_DE            //Geman weekdays
 //#define Temp_F           //Teperature will be converted from C to F
@@ -162,12 +161,10 @@ Adafruit_Si7021 sensor = Adafruit_Si7021();
 #endif
 
 #ifdef RAD
-//#include "pt2257.h"
+#include "pt2257.h"
 #include <radio.h>
 #include <RDA5807M.h>
 #include <SI4703.h>
-#include <RDSParser.h>
-
 
 #define FIX_BAND RADIO_BAND_FM  ///< The band that will be tuned by this sketch is FM.
 #define FIX_STATION 10360       ///< The station that will be tuned by this sketch is 89.30 MHz.
@@ -176,13 +173,9 @@ Adafruit_Si7021 sensor = Adafruit_Si7021();
 #define RESET_PIN D7 //only needed for SI4703 (disable buzzer to use that pin)
 #define MODE_PIN D2  // same as SDA
 
-//PT2257 pt2257;
+PT2257 pt2257;
 RDA5807M radio;  // Create an instance of Class for RDA5807M Chip
 //SI4703 radio;  // Create an instance of Class for Si4703 Chip
-
-/// get a RDS parser
-RDSParser rds;
-
 #endif
 
 
@@ -204,13 +197,7 @@ RDSParser rds;
 #define alarmMinuteADDR 4  // EEPROM Adress
 #define wifiStateADDR 5    // EEPROM Adress
 
-#ifdef Doublesegment
-#define NUMPIXELS 120
-#endif 
-#ifndef Doublesegment
 #define NUMPIXELS 60
-#endif
-
 #define LONG_PRESS_TIME 500  // in ms
 
 
@@ -225,14 +212,9 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LEDPIN, NEO_GRB + NEO_KH
 
 #ifdef OLED
 #include <U8g2lib.h>
-
-//U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/SCL, /* data=*/SDA, /* reset=*/U8X8_PIN_NONE);  // slow - working with SI4703
-U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // fast - working with RDA5807M
-
-// debug only
+//U8G2_SSD1306_96X16_ER_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // EastRising 0.69" OLED
+U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/SCL, /* data=*/SDA, /* reset=*/U8X8_PIN_NONE);  // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
 //U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
-
-
 #endif
 
 
@@ -311,10 +293,6 @@ char daysOfTheWeek[7][12] = { "SO", "MO", "DI", "MI", "DO", "FR", "SA" };
 #ifndef lang_DE
 char daysOfTheWeek[7][12] = { "SU", "MO", "TU", "WE", "TH", "FR", "SA" };
 #endif
-
-const char *stationname;
-bool rdsvalid = false;
-
 
 byte alarmset = 0;
 byte old_alarmset;
@@ -555,56 +533,6 @@ int I2C_ClearBus() {
 
 
 void setup() {
-
-  #ifdef RAD
-delay(100);
-
-  
-
-  radio.setup(RADIO_RESETPIN, RESET_PIN);
-  radio.setup(RADIO_SDAPIN, MODE_PIN);
-
-    // Enable information to the Serial port
-  radio.debugEnable(false);
-  radio._wireDebug(false);
-
-  // Set FM Options for Europe
-  radio.setup(RADIO_FMSPACING, RADIO_FMSPACING_100);   // for EUROPE
-  radio.setup(RADIO_DEEMPHASIS, RADIO_DEEMPHASIS_50);  // for EUROPE
-
-  // Initialize the Radio
-  if (!radio.initWire(Wire)) {
-    Serial.println("no radio chip found.");
-    warningcode = 3;
-    //delay(1000);
-   // ESP.restart();
-  };
-
-  volume = 5;                //default vol
-  old_volume = volume;
-  delay(20);
-  //radio.debugEnable();  // Enable information to the Serial port
-  radio.setBandFrequency(FIX_BAND, FIX_STATION);
-  delay(20);
-  radio.setVolume(volume);
-  radio.setMono(false);
-  radio.setMute(true);
-  radio.setBassBoost(true);
-  //pt2257.init();
-  //pt2257.mute(false);
-  //radio.setMute(false);
-
-  //pt2257.set_volume(volume);  // 0-75 possible
-  //radio.setVolume(volume);
-  radio.attachReceiveRDS(RDS_process);
-  rds.attachServiceNameCallback(DisplayServiceName);
-  //rds.attachTextCallback(DisplayRDSText);
-
-#endif
-
-//------------------------------
-
-
   pinMode(LEDPIN, OUTPUT);
   digitalWrite(LEDPIN, LOW);
 
@@ -663,9 +591,13 @@ delay(100);
 
 #ifdef Si7021sensor
   if (!sensor.begin()) {
-    Serial.println("ERROR: Did not find an original Si7021 sensor!");
+    Serial.println("ERROR: Did not find Si7021 sensor!");
+    #ifdef Buzzer
+     // tone(buzzer, 500, 1000);
+     // delay(1000);
+    #endif    
     //warningcode = 1;
-    //^ removing warningcode as this warning will be triggered on cloned sensors 
+    //^ removing for now as this warning will be triggered on cloned sensors 
   }
 #endif
 
@@ -674,10 +606,7 @@ delay(100);
 #endif
 
 #ifdef OLED
-
   u8g2.begin();
-  u8g2.setBusClock(240000);
-
   //u8g2.sendF("c", 0x0a7); //invert display
   connectstate();
 #endif
@@ -767,7 +696,43 @@ delay(100);
 
 //------------------------------
 
+#ifdef RAD
+  radio.setup(RADIO_RESETPIN, RESET_PIN);
+  radio.setup(RADIO_SDAPIN, MODE_PIN);
 
+  // Enable information to the Serial port
+  radio.debugEnable(false);
+  radio._wireDebug(false);
+
+  // Set FM Options for Europe
+  radio.setup(RADIO_FMSPACING, RADIO_FMSPACING_100);   // for EUROPE
+  radio.setup(RADIO_DEEMPHASIS, RADIO_DEEMPHASIS_50);  // for EUROPE
+
+    // Initialize the Radio
+  if (!radio.initWire(Wire)) {
+    Serial.println("no radio chip found.");
+    delay(4000);
+    ESP.restart();
+  };
+  
+  //radio.init();
+
+  old_volume = 20;
+  volume = 20;                //default vol
+  
+  radio.setBandFrequency(FIX_BAND, FIX_STATION);
+  radio.setVolume(FIX_VOLUME);
+  radio.setMono(false);
+  radio.setMute(false);
+  radio.setBassBoost(true);
+  pt2257.init();
+  pt2257.mute(false);
+  radio.setMute(false);
+
+  pt2257.set_volume(volume);  // 0-75 possible
+#endif
+
+//------------------------------
 
   rtc.begin();
 
@@ -816,47 +781,8 @@ delay(100);
 
 }
 
-#ifdef RAD
+
 //------------------------------
-
-/// Update the ServiceName text on the OLED display when in RDS mode.
-void DisplayServiceName(const char *name) {
-  //Serial.print("RDS:");
-  //Serial.println(name);
-  //u8g2.setCursor(0, 25);
-  //u8g2.print(name);
-  stationname = name;
-  
-  const char *oldstationnamename = stationname;
-
-  if (stationname == oldstationnamename) {
-    rdsvalid = true;
-  }
-  else {
-    rdsvalid = false;
-  }
-
-  Serial.print("Name:");
-  Serial.println(stationname);
-}  // DisplayServiceName()
-
-
-/// Update the RDS Text
-void DisplayRDSText(const char *txt) {
-  Serial.print("Text:");
-  Serial.println(txt);
-  u8g2.print(txt);
-}  // DisplayRDSText()
-
-
-void RDS_process(uint16_t block1, uint16_t block2, uint16_t block3, uint16_t block4) {
-  rds.processData(block1, block2, block3, block4);
-}
-#endif
-//------------------------------
-
-
-
 
 
 
@@ -1137,7 +1063,7 @@ else if (digitalRead(bt_dwn) != 1) {
   // 2 = Play/Pause
   // 1 = Menu
 
-#ifdef RAD
+
 //Radio Control
   if (val4 == 2) { //play button
       #ifdef Buzzer
@@ -1145,17 +1071,18 @@ else if (digitalRead(bt_dwn) != 1) {
       #endif
     if ((radiostate == 0) && (menu == 0)) {
       radiostate = 1;
-      radio.setMute(false);
-
+          radio.setMute(false);
 
       oledpage = 3; // Radio Display
     } else {
       radiostate = 0;
-      radio.setMute(true);
+          radio.setMute(true);
+
       oledpage = 0;
     }
   }
-#endif
+
+
 
  if (val4 == 1) { //menu button
     if (radiostate == 0) {
@@ -1187,7 +1114,6 @@ else if (digitalRead(bt_dwn) != 1) {
      #endif
       #ifdef RAD
       radio.seekUp(true);
-      rdsvalid = false;
       #endif
     }
     
@@ -1206,7 +1132,6 @@ else if (digitalRead(bt_dwn) != 1) {
       #endif
       #ifdef RAD
       radio.seekDown(true);
-      rdsvalid = false;
       #endif
     } 
    }
@@ -1223,15 +1148,21 @@ else if (digitalRead(bt_dwn) != 1) {
       #ifdef Buzzer
        tone(buzzer, 100, 50);
       #endif
-      if (volume < 15) {
-        volume++;
+      if (volume > 0) {
+        volume--;
 #ifdef RAD
-        //pt2257.set_volume(volume);  // 0-75 possible
-        //pt2257.mute(false);
-        radio.setVolume(volume);
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
         radio.setMute(false);
 #endif
-      } 
+      } else {
+        volume = 0;
+#ifdef RAD
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
+        radio.setMute(false);
+#endif
+      }
       }
     else if ((radiostate == 0) && (menu == 0)) {  // controlls brightness while radio is off and menu not active
     #ifdef Buzzer
@@ -1254,20 +1185,18 @@ else if (digitalRead(bt_dwn) != 1) {
        tone(buzzer, 100, 50);
        #endif
       // Volume Control > 75 = muted, 0 = max volume
-      if (volume > 0) {
-        volume--;
+      if (volume < 40) {
+        volume++;
 #ifdef RAD
-        //pt2257.set_volume(volume);  // 0-75 possible
-        //pt2257.mute(false);
-        radio.setVolume(volume);
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(false);
         radio.setMute(false);
 #endif
       } else {
-        volume = 0;
+        volume = 40;
 #ifdef RAD
-        //pt2257.set_volume(volume);  // 0-75 possible
-        //pt2257.mute(true);
-        radio.setVolume(volume);
+        pt2257.set_volume(volume);  // 0-75 possible
+        pt2257.mute(true);
         radio.setMute(true);
 #endif
       }
@@ -1416,14 +1345,13 @@ input_handeler();
 
   if (pressedbut == 7) {
 //FIXME > when user turns on wifi it is stuck in AP mode until it can connect - no way back to offline mode until wifi settings are put in
-     //Deactivated for now
 
     if (wifion == 0) {
-    //  wifion = 1; 
-    //  Serial.println("WiFi ON");
-    //  EEPROM.put(wifiStateADDR, wifion);
-    //  EEPROM.commit();
-    //  runserver();
+      wifion = 1;
+      Serial.println("WiFi ON");
+      EEPROM.put(wifiStateADDR, wifion);
+      EEPROM.commit();
+      runserver();
     } else {
       wifion = 0;
       Serial.println("WiFi OFF");
@@ -1448,11 +1376,6 @@ input_handeler();
 #ifdef RAD
   if (radiostate == 1) {
     digitalWrite(stateLED, HIGH);
-    radio.checkRDS();
-
-
-
-
   } else {
     digitalWrite(stateLED, LOW);
   }
@@ -1625,7 +1548,7 @@ input_handeler();
 
   looptime++;
 
-  if (looptime >= 200) {  //delaying the reading
+  if (looptime >= 150) {  //delaying the reading
     #ifdef IR  //ATTINY required
     // measurung requires abaout 1s AFTER startup to ensure correct voltage reading
 
@@ -1736,20 +1659,12 @@ void color_cyber() {
     uint32_t yellow = pixels.Color(250, 200, 0);
     uint32_t pink = pixels.Color(255, 0, 255);
     uint32_t purple = pixels.Color(100, 0, 255);
-    #ifdef Doublesegment
-    pixels.fill(pink, 0, 14);
-    pixels.fill(purple, 14, 28);
-    pixels.fill(yellow, 28, 42);
-    pixels.fill(green, 42, 56);
-    pixels.fill(mint, 56, 60);
-    #endif
-    #ifndef Doublesegment
+
     pixels.fill(pink, 0, 7);
     pixels.fill(purple, 7, 14);
     pixels.fill(yellow, 14, 21);
     pixels.fill(green, 21, 28);
     pixels.fill(mint, 28, 30);
-    #endif
   }
   mapPixels();
   setbrightness();
@@ -1830,119 +1745,38 @@ void color_cyan() {
 //==================================================================================================================
 void mapPixels() {
   //1st digit definitions number_min2 (counting from right)
-
   if (number_min2 == 0) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    #endif
-
   } else if (number_min2 == 1) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 2) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 3) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 4) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 5) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 6) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(12, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 7) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 8) {
   } else if (number_min2 == 9) {
-    #ifdef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 10) {  //all off code
-  #ifdef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
@@ -1950,238 +1784,68 @@ void mapPixels() {
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 11) {  //"c" code
-    #ifdef Doublesegment
-    pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 13) {  //"o up" code
-    #ifdef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 14) {  //"o down" code
-    #ifdef Doublesegment
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min2 == 15) {  //"dash" code
-    #ifdef Doublesegment
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    #endif
   }
   else if (number_min2 == 16) {  //"F" code
-    #ifdef Doublesegment
-    pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6, pixels.Color(0, 0, 0));
-    #endif
   }
 
 
 
   //2nd digit definitions number_min1 (counting from right)
   if (number_min1 == 0) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(3 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 1) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 2) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 3) {
-     #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 4) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 5) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 6) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(12 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 7) {
-     #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 8) {
   } else if (number_min1 == 9) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 10) {  //all off code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 14, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
@@ -2189,220 +1853,66 @@ void mapPixels() {
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 11) {  //"c" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 14, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 13) {  //"o up" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 14) {  //"o down" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 14, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_min1 == 15) {  //"dash" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 14, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-    #endif
   }
   else if (number_min1 == 16) {  //"F" code
-   #ifdef Doublesegment
-    pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 14, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 14, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(1 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 7, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 7, pixels.Color(0, 0, 0));
-    #endif
   }
 
   //3rd digit definitions number_hour2 (counting from right)
   if (number_hour2 == 0) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(6 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 1) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 2) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(4 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 3) {
-     #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 4) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 5) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 6) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(12 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 7) {
-     #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 8) {
   } else if (number_hour2 == 9) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 10) {  //all off code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 28, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
@@ -2410,205 +1920,61 @@ void mapPixels() {
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 11) {  //"c" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(4 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 28, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 13) {  //"o up" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 28, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 14) {  //"o down" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 28, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour2 == 15) {  //"dash" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 28, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 28, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 14, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 14, pixels.Color(0, 0, 0));
-    #endif
   }
 
   //4th digit definitions number_hour1 (counting from right)
   if (number_hour1 == 0) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(6 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(3 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 1) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 2) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(4 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 3) {
-     #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 4) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 5) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 6) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(12 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 7) {
-     #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 8) {
   } else if (number_hour1 == 9) {
-    #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    #endif
-    #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 10) {  //all off code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(6 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(7 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 42, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
@@ -2616,122 +1982,50 @@ void mapPixels() {
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 11) {  //"c" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(4 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 42, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 13) {  //"o up" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 42, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 14) {  //"o down" code
-  #ifndef Doublesegment
-  #ifdef Doublesegment
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 42, pixels.Color(0, 0, 0));
-    #endif
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-    #endif
   } else if (number_hour1 == 15) {  //"dash" code
-  #ifdef Doublesegment
-    pixels.setPixelColor(0 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(1 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(2 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(4 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(5 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(8 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(9 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(10 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(11 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(12 + 42, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(13 + 42, pixels.Color(0, 0, 0));
-    #endif
-  #ifndef Doublesegment
     pixels.setPixelColor(0 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(4 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(5 + 21, pixels.Color(0, 0, 0));
     pixels.setPixelColor(6 + 21, pixels.Color(0, 0, 0));
-    #endif
   }
 
   //dots
   if (page == 0) {
     if (dot == 0) {
-      #ifdef Doublesegment
-      pixels.setPixelColor(56, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(57, pixels.Color(0, 0, 0));
-      #endif
-      #ifndef Doublesegment
       pixels.setPixelColor(28, pixels.Color(0, 0, 0));
       pixels.setPixelColor(29, pixels.Color(0, 0, 0));
-      #endif
     } else {
     }
   } else if (page == 1) {
 
 #ifdef Si7021sensor
-    #ifdef Doublesegment
-      pixels.setPixelColor(56, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(57, pixels.Color(0, 0, 0));
-      #endif
-      #ifndef Doublesegment
-      pixels.setPixelColor(28, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(29, pixels.Color(0, 0, 0));
-      #endif
+    pixels.setPixelColor(28, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(29, pixels.Color(0, 0, 0));
 #endif
 
 #ifndef Si7021sensor
-    #ifdef Doublesegment
-      pixels.setPixelColor(57, pixels.Color(0, 0, 0));
-      #endif
-      #ifndef Doublesegment
-      pixels.setPixelColor(29, pixels.Color(0, 0, 0));
-      #endif
+    pixels.setPixelColor(29, pixels.Color(0, 0, 0));
 
 #endif
 
   } else if (page == 2) {
-    #ifdef Doublesegment
-      pixels.setPixelColor(56, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(57, pixels.Color(0, 0, 0));
-      #endif
-      #ifndef Doublesegment
-      pixels.setPixelColor(28, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(29, pixels.Color(0, 0, 0));
-      #endif
+    pixels.setPixelColor(28, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(29, pixels.Color(0, 0, 0));
   }
 }
 
@@ -3145,7 +2439,7 @@ void versioninfo() {
 
 uint32_t off = pixels.Color(0, 0, 0); 
 uint32_t white = pixels.Color(255, 255, 255);
-pixels.fill(white, 0, 58);
+pixels.fill(white, 0, 29);
 
 number_hour2 = 15;
 number_hour1 = 15;
@@ -3194,12 +2488,7 @@ while (menu == 1) {
 
     if ((menustep == 0) || (menustep == 1)) {
       //display time digits
-      #ifdef Doublesegment
-      pixels.fill(white, 0, 56);
-      #endif
-      #ifndef Doublesegment
       pixels.fill(white, 0, 29);
-      #endif
 
       number_hour2 = (newhours % 10);  //last digit of the seconds
       if (newhours < 10) {
@@ -3218,12 +2507,7 @@ while (menu == 1) {
 
     else if ((menustep == 2) || (menustep == 3)) {
       //display alarm digits
-      #ifdef Doublesegment
-      pixels.fill(red, 0, 56);
-      #endif
-      #ifndef Doublesegment
       pixels.fill(red, 0, 29);
-      #endif
 
       number_hour2 = (newalarmhours % 10);  //last digit of the seconds
       if (newalarmhours < 10) {
@@ -3243,12 +2527,7 @@ while (menu == 1) {
 
     else if ((menustep == 4) || (menustep == 5)) {
       //display alarm digits
-      #ifdef Doublesegment
-      pixels.fill(green, 0, 56);
-      #endif
-      #ifndef Doublesegment
       pixels.fill(green, 0, 29);
-      #endif
 
       number_hour2 = (newday % 10);  //last digit of the seconds
       if (newday < 10) {
@@ -3267,18 +2546,10 @@ while (menu == 1) {
     }
 
     else if (menustep == 6) {
-      
       //display alarm digits
-      #ifdef Doublesegment
-      pixels.fill(green, 0, 26);
-      pixels.fill(green, 28, 57);
-      pixels.fill(off, 56, 57);  // dots are off
-      #endif
-      #ifndef Doublesegment
       pixels.fill(green, 0, 13);
       pixels.fill(green, 14, 29);
       pixels.fill(off, 28, 29);  // dots are off
-      #endif
 
       Serial.print("newyear >:");
       Serial.println(newhours);
@@ -3296,16 +2567,9 @@ while (menu == 1) {
 // Time set routine ------------------------------
 
     if (menustep == 0) { //edit hours
-      #ifdef Doublesegment
-      pixels.fill(off, 0, 28);   //off minutes
-      pixels.fill(off, 56, 57);  //off dots
-      #endif
-      #ifndef Doublesegment
       pixels.fill(off, 0, 14);   //off minutes
       pixels.fill(off, 28, 29);  //off dots
-      #endif
-            //showing only hours
-
+      //showing only hours
 
       Serial.print("newhours >:");
       Serial.println(newhours);
@@ -3328,12 +2592,7 @@ while (menu == 1) {
         }
       }
     } else if (menustep == 1) { //edit minutes
-      #ifdef Doublesegment
-      pixels.fill(off, 28, 60);  // hours and dots
-      #endif
-      #ifndef Doublesegment
       pixels.fill(off, 14, 30);  // hours and dots
-      #endif
       //showing only minutes
 
       Serial.print("newminutes >:");
@@ -3357,14 +2616,8 @@ while (menu == 1) {
         }
       }
     } else if (menustep == 2) { //edit alarm hours
-      #ifdef Doublesegment
-      pixels.fill(off, 0, 28);   // minutes off
-      pixels.fill(off, 56, 57);  //off dots
-      #endif
-      #ifndef Doublesegment
       pixels.fill(off, 0, 14);   // minutes off
       pixels.fill(off, 28, 29);  //dots off
-      #endif
       //showing only hours
 
       Serial.print("newalarmhours >:");
@@ -3388,12 +2641,8 @@ while (menu == 1) {
         }
       }
     } else if (menustep == 3) { //edit alarm minutes
-      #ifdef Doublesegment
-      pixels.fill(off, 28, 60);  // hours and dots off
-      #endif
-      #ifndef Doublesegment
       pixels.fill(off, 14, 30);  // hours and dots off
-      #endif
+
       Serial.print("newalarmminutes >:");
       Serial.println(newalarmminutes);
 
@@ -3417,12 +2666,7 @@ while (menu == 1) {
     }
 
     else if (menustep == 4) { //edit day
-      #ifdef Doublesegment
-      pixels.fill(off, 0, 28);  // hours and dots are off
-      #endif
-      #ifndef Doublesegment
       pixels.fill(off, 0, 14);  // hours and dots are off
-      #endif
 
       Serial.print("newday >:");
       Serial.println(newday);
@@ -3447,12 +2691,7 @@ while (menu == 1) {
     }
 
     else if (menustep == 5) { //edit month
-      #ifdef Doublesegment
-      pixels.fill(off, 28, 60);  // minutes and dots are off
-      #endif
-      #ifndef Doublesegment
       pixels.fill(off, 14, 30);  // minutes and dots are off
-      #endif
 
       Serial.print("newmonth >:");
       Serial.println(newmonth);
@@ -3972,11 +3211,11 @@ void warningpopup() {
       u8g2.setCursor(0, 25);
 
       if (warningcode == 1) {
-        u8g2.print("Si7021 init");  //sensor issue > remooved
+        u8g2.print("Si7021 init");  //sensor issue
       } else if (warningcode == 2) {
         u8g2.print("FS Error");  //filesystem issue
       } else if (warningcode == 3) {
-        u8g2.print("Radio Error");  //Radio issue
+        u8g2.print("PwrlossRTC");  //RTC lost power
       } else if (warningcode == 4) {
         u8g2.print("RTC LowBat");  //RTC batt issue
       } else if (warningcode == 5) {
@@ -4017,8 +3256,9 @@ void volumepopup() {
       u8g2.setCursor(25, 25);
       u8g2.drawXBMP(0,6,20,20, vol_bmp); 
       u8g2.print("VOLUME:");
-      byte displ_vol = map(volume, 0, 15, 0, 100);
-      u8g2.print(volume);
+      byte displ_vol = map(volume, 0, 40, 100, 0);
+      //byte vol_bar = map(displ_vol, 0, 40, 0, 100);
+      u8g2.print(displ_vol);
       u8g2.drawBox(0, 31, displ_vol, 5);
     } else {
     }
@@ -4045,30 +3285,22 @@ void OLEDdraw() {
   do {
 
     const char DEGREE_SYMBOL[] = { 0xB0, '\0' };
-    //double micvolts = (micvalue * 3.05) / 1023;
+    double micvolts = (micvalue * 3.05) / 1023;
 
-
-
-    if (micvalue > 1023) {
-      micvalue = 1023;
+    if (micvalue > 150) {
+      micvalue = 150;
     }
 
-    if (micvalue < 17) {
+    if (micvalue < 6) {
       micvalue = 0;
     }
 
-if (volume < 7) {
-    micvalue = micvalue*2;
-  }
-
-    Serial.println(micvalue);
+    byte adjust = 10 + volume * 10;
+    byte soundval = map(micvalue, 0, adjust, 1, 128);  //was 90
 
 
-    //byte adjust = 10 + volume * 10;
-    byte soundval = map(micvalue, 17, 1023, 1, 128);  //was 90
-
-
-    //u8g2.drawRFrame(0, 0, 128, 32, 0); //comment out to align the screen
+    //u8g2.drawFrame(0, 0, 96, 16);
+    //u8g2.drawRFrame(0, 0, 128, 32, 0);
 
 
   // TIME/DATE SETUP SCREEN MANAGEMENT  ------------------------------
@@ -4221,18 +3453,9 @@ if (volume < 7) {
 #ifdef RAD
       char s[12];
       radio.formatFrequency(s, sizeof(s));
-
-      if (rdsvalid == true){
-      byte width = u8g2.getDisplayWidth();
-      byte pos = ((width - (u8g2.getUTF8Width(stationname))) / 2);  //calculate the text lenght
-      u8g2.setCursor(pos, 25);
-      u8g2.print(stationname);
-      }
-      else {
+      //Serial.print("Station:");
+      //Serial.println(s);
       u8g2.print(s);
-      }
-      
-
 #endif
       u8g2.drawBox(0, 31, soundval, 2);
 
@@ -4390,7 +3613,7 @@ if (volume < 7) {
       
       u8g2.setCursor(1, 10);
       u8g2.print("LED CLOCK ");
-      u8g2.print("Ver ");
+      u8g2.print("V");
       u8g2.print(version);
       
       u8g2.setCursor(1, 20);
